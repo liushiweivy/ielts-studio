@@ -2,11 +2,11 @@
 <html lang="zh-CN">
 <head>
 <meta charset="UTF-8">
-<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<meta name="viewport" content="width=device-width, initial-scale=1.0, viewport-fit=cover">
 <title>雅思书房 · IELTS Studio</title>
 <meta name="description" content="雅思听说读写一站式练习：核心词汇闪卡、听力听写、阅读真题训练、写作计时与口语题卡。">
 <link rel="icon" href="data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 100 100'%3E%3Crect width='100' height='100' rx='18' fill='%23c0452f'/%3E%3Ctext x='50' y='72' font-size='62' text-anchor='middle' fill='%23fbf7ee' font-family='serif' font-weight='bold'%3E%E9%9B%85%3C/text%3E%3C/svg%3E">
-<link rel="stylesheet" href="css/styles.css?v=20261027">
+<link rel="stylesheet" href="css/styles.css?v=20261027i">
 </head>
 <body>
 
@@ -118,15 +118,16 @@
 <main class="page" id="page-words">
   <span class="eyebrow">VOCABULARY</span>
   <h1 class="h-serif page-title">词汇闪卡</h1>
-  <p class="page-sub">五个等级全覆盖：雅思核心 120 词 + 雅思词库 / 小学 / 四级 / 六级全量词库。闪卡翻面、列表全展开逐词朗读、随身听磨耳朵，「认识」会记入掌握度，可随时切换拼写测验与同义替换。</p>
+  <p class="page-sub">五个等级全覆盖：雅思核心 120 词 + 雅思词库 / 小学 / 四级 / 六级全量词库。闪卡翻面、列表全展开逐词朗读；🎧 随身听以日常实用口语为主——15 个生活场景短句，英文朗读配中文翻译，也可切回单词播报。「认识」会记入掌握度，另有拼写测验与同义替换。</p>
   <div class="chips" id="level-chips" style="margin-bottom:10px"></div>
   <div class="chips" id="word-chips"></div>
   <div style="display:flex;gap:10px;margin-bottom:22px;flex-wrap:wrap">
     <button class="btn btn-dark btn-sm" id="mode-card">🗂 闪卡模式</button>
     <button class="btn btn-ghost btn-sm" id="mode-list">📜 列表模式</button>
-    <button class="btn btn-ghost btn-sm" id="mode-radio">🎧 随身听</button>
+    <button class="btn btn-ghost btn-sm" id="mode-radio">🎧 随身听·口语</button>
     <button class="btn btn-ghost btn-sm" id="mode-quiz">⌨ 拼写测验（10 题）</button>
     <button class="btn btn-ghost btn-sm" id="mode-para">🔁 同义替换（10 题）</button>
+    <button class="btn btn-ghost btn-sm" id="mode-pick">🧺 选词建表</button>
   </div>
 
   <div id="word-card-stage" class="stage"></div>
@@ -134,6 +135,7 @@
   <div id="word-radio-stage" class="stage" style="display:none"></div>
   <div id="word-quiz-stage" class="stage" style="display:none"></div>
   <div id="word-para-stage" class="stage" style="display:none"></div>
+  <div id="word-pick-stage" class="stage" style="display:none"></div>
 </main>
 
 <!-- ============ 听力 ============ -->
@@ -200,10 +202,12 @@
 
 <div class="toast" id="toast"></div>
 
-<script src="js/vocab-levels.js?v=20261027"></script>
-<script src="js/listening-bank.js?v=20261027"></script>
-<script src="js/data.js?v=20261027"></script>
+<script src="js/vocab-levels.js?v=20261027i"></script>
+<script src="js/listening-bank.js?v=20261027i"></script>
+<script src="js/data.js?v=20261027i"></script>
+<script src="js/tts-online.js?v=20261027i"></script>
+<script src="js/pick-core.js?v=20261027i"></script>
 <script src="android-tts.js"></script>
-<script src="js/app.js?v=20261027"></script>
+<script src="js/app.js?v=20261027i"></script>
 </body>
 </html>

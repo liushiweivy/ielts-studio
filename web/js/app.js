@@ -60,6 +60,12 @@
     speechSynthesis.cancel();
     speechSynthesis.speak(makeUtter(text, 'en', rate));
   }
+  // tts-online.js 看门狗：系统语音静默失效转在线朗读时提示一次（需联网）
+  if (window.addEventListener) {
+    window.addEventListener('ieltsTtsOnline', function () {
+      toast('系统语音不可用，已自动改用在线朗读（需联网）');
+    });
+  }
   // 生成一条 utterance（随身听模式要自己串联 onend，不走 cancel 版 speak）
   function makeUtter(text, lang, rate) {
     var u = new SpeechSynthesisUtterance(text);
@@ -135,16 +141,45 @@
   });
   function allListening() { return D.LISTENING.concat(LISTEN_BANK); }
   var cardState = { level: 'ielts', cat: 'all', idx: 0, list: D.WORDS.slice(), flipped: false };
+  var PICK = window.IELTS_PICK_CORE;
+  // 跨 4 档难度的单词索引（自定义词表只存单词字符串，用时经它还原词条）
+  var VOCAB_INDEX = PICK ? PICK.buildIndex(VOCAB) : {};
   // 分级词库条目是紧凑数组 [w,ph,pos,cn,ex?,exCn?]，统一映射成与雅思词相同的对象
+  function entryToWord(e, cat) {
+    return { w: e[0], ph: e[1], pos: e[2], cn: e[3], ex: e[4] || '', exCn: e[5] || '', cat: cat };
+  }
   function levelList(level) {
-    return (VOCAB.WORDS[level] || []).map(function (e) {
-      return { w: e[0], ph: e[1], pos: e[2], cn: e[3], ex: e[4] || '', exCn: e[5] || '', cat: level };
-    });
+    if (level.indexOf('set:') === 0) {
+      var s = findSet(level.slice(4));
+      var entries = s ? PICK.resolveWords(VOCAB_INDEX, s.words) : [];
+      return entries.map(function (e) { return entryToWord(e, level); });
+    }
+    return (VOCAB.WORDS[level] || []).map(function (e) { return entryToWord(e, level); });
   }
   function levelName(id) {
     if (id === 'ielts') return '雅思核心';
+    if (id.indexOf('set:') === 0) {
+      var s = findSet(id.slice(4));
+      return s ? s.name : '我的词表';
+    }
     var l = VOCAB.LEVELS.find(function (x) { return x.id === id; });
     return l ? l.name : id;
+  }
+  /* ---------- 自定义词表（选词建表） ---------- */
+  function getSets() { return loadStore().sets || []; }
+  function findSet(id) { return getSets().find(function (s) { return s.id === id; }) || null; }
+  function saveSets(sets) { saveStore({ sets: sets }); }
+  function pickDraft() { return loadStore().pickDraft || []; }
+  function savePickDraft(words) { saveStore({ pickDraft: words }); }
+  function deleteSet(id) {
+    var sets = getSets().filter(function (s) { return s.id !== id; });
+    saveSets(sets);
+    if (cardState.level === 'set:' + id) {
+      cardState.level = 'ielts'; cardState.cat = 'all';
+      renderLevelChips(); renderWordChips(); enterMode(currentMode);
+    } else {
+      renderLevelChips();
+    }
   }
   function renderLevelChips() {
     var html = '<button class="chip ' + (cardState.level === 'ielts' ? 'on' : '') + '" data-level="ielts">雅思核心 ' + D.WORDS.length + '</button>';
@@ -152,9 +187,21 @@
       html += '<button class="chip ' + (cardState.level === l.id ? 'on' : '') + '" data-level="' + l.id + '">' +
         l.name + ' ' + (VOCAB.WORDS[l.id] || []).length + '</button>';
     });
+    getSets().forEach(function (s) {
+      html += '<button class="chip chip-set ' + (cardState.level === 'set:' + s.id ? 'on' : '') + '" data-level="set:' + s.id + '" title="' + s.words.length + ' 个单词">' +
+        '🧺 ' + esc(s.name) + ' ' + s.words.length +
+        '<span class="chip-del" data-del="' + s.id + '" title="删除该词表">×</span></button>';
+    });
     document.getElementById('level-chips').innerHTML = html;
   }
   document.getElementById('level-chips').addEventListener('click', function (e) {
+    var del = e.target.closest('[data-del]');
+    if (del) {
+      e.stopPropagation();
+      var s0 = findSet(del.dataset.del);
+      if (s0 && confirm('删除词表「' + s0.name + '」？（词库单词不会被删）')) deleteSet(del.dataset.del);
+      return;
+    }
     var b = e.target.closest('.chip'); if (!b) return;
     if (b.dataset.level !== cardState.level) { cardState.level = b.dataset.level; cardState.cat = 'all'; }
     enterMode(currentMode); // 切等级后停留在当前模式（闪卡/列表/随身听各自刷新）
@@ -181,6 +228,8 @@
     cardState.cat = cat;
     if (cardState.level === 'ielts') {
       cardState.list = cat === 'all' ? D.WORDS.slice() : D.WORDS.filter(function (w) { return w.cat === cat; });
+    } else if (cardState.level.indexOf('set:') === 0) {
+      cardState.list = levelList(cardState.level); // 自定义词表保持选词顺序
     } else {
       cardState.list = shuffle(levelList(cardState.level)); // 大词库乱序进入，避免永远从 a 开始
     }
@@ -326,20 +375,95 @@
     });
   }
 
-  /* ---------- 随身听：边工作边听，单词→中文释义→例句 连续播报 ---------- */
-  var radio = { list: [], idx: 0, playing: false, gen: 0, watchdog: null };
+  /* ---------- 随身听：日常口语短句（默认，英文→中文翻译）+ 单词连续播报 ---------- */
+  // opts 放在状态里：每播一句都会重渲染面板，选项不能只活在 DOM 里（否则每句被重置）
+  var radio = { src: 'phrase', scene: 'all', list: [], idx: 0, playing: false, gen: 0, watchdog: null,
+                opts: { cn: true, ex: true, times: 2, rate: 1 } };
+  (function restoreRadioPrefs() {
+    var r = loadStore().radio;
+    if (r && typeof r === 'object') {
+      if (r.src === 'word' || r.src === 'phrase') radio.src = r.src;
+      if (typeof r.scene === 'string') radio.scene = r.scene;
+    }
+  })();
+  function saveRadioPrefs() { saveStore({ radio: { src: radio.src, scene: radio.scene } }); }
+  function phraseGroups() { return D.DAILY_PHRASES || []; }
+  function phraseTotal() {
+    return phraseGroups().reduce(function (n, g) { return n + g.items.length; }, 0);
+  }
+  function phrasePool() {
+    var out = [];
+    phraseGroups().forEach(function (g) {
+      if (radio.scene === 'all' || radio.scene === g.id) {
+        g.items.forEach(function (it) { out.push({ en: it[0], cn: it[1], scene: g.id }); });
+      }
+    });
+    return out;
+  }
+  function phraseSceneName(id) {
+    if (id === 'all') return '全部场景';
+    var g = phraseGroups().find(function (x) { return x.id === id; });
+    return g ? g.name : id;
+  }
+  function rebuildRadioList(doShuffle) {
+    var list = radio.src === 'phrase' ? phrasePool() : currentWordPool();
+    radio.list = doShuffle ? shuffle(list) : list;
+  }
   function startRadio() {
-    renderLevelChips(); renderWordChips();
-    radio.list = currentWordPool();
+    var phraseMode = radio.src === 'phrase';
+    // 口语模式不按词汇等级/话题选词，藏掉词汇页那两排 chips（离开随身听时由 setMode 恢复）
+    document.getElementById('level-chips').style.display = phraseMode ? 'none' : '';
+    document.getElementById('word-chips').style.display = phraseMode ? 'none' : '';
+    if (!phraseMode) { renderLevelChips(); renderWordChips(); }
+    rebuildRadioList(false);
     radio.idx = 0;
     radio.playing = false;
     renderRadio();
   }
+  function optSel(name, val) {
+    return radio.opts[name] === val ? ' selected' : '';
+  }
   function renderRadio() {
     var stage = document.getElementById('word-radio-stage');
-    var w = radio.list[radio.idx] || null;
-    stage.innerHTML =
-      '<div class="panel panel-pad">' +
+    var phraseMode = radio.src === 'phrase';
+    var item = radio.list[radio.idx] || null;
+    var wordPoolTotal = currentWordPool().length;
+    var html = '<div class="radio-src">' +
+        '<button class="btn btn-sm ' + (phraseMode ? 'btn-dark' : 'btn-ghost') + '" data-rsrc="phrase">🗣 日常口语 ' + phraseTotal() + '</button>' +
+        '<button class="btn btn-sm ' + (phraseMode ? 'btn-ghost' : 'btn-dark') + '" data-rsrc="word">📖 单词播报 ' + wordPoolTotal + '</button>' +
+      '</div>';
+
+    if (phraseMode) {
+      html += '<div class="chips radio-scene">' +
+        '<button class="chip ' + (radio.scene === 'all' ? 'on' : '') + '" data-rscene="all">全部 ' + phraseTotal() + '</button>' +
+        phraseGroups().map(function (g) {
+          return '<button class="chip ' + (radio.scene === g.id ? 'on' : '') + '" data-rscene="' + g.id + '">' +
+            esc(g.name) + ' ' + g.items.length + '</button>';
+        }).join('') +
+      '</div>';
+    }
+
+    if (phraseMode) {
+      html += '<div class="panel panel-pad radio-card">' +
+        '<div class="quiz-hint">日常口语连播：先读英文（可重复多遍跟读），再给中文翻译，自动播下一句。边做事边磨耳朵，抬头就能看原文和翻译。</div>' +
+        (item ? '<span class="tag tag-green">' + esc(phraseSceneName(item.scene)) + '</span>' +
+          '<div class="radio-en">' + esc(item.en) + '</div>' +
+          '<div class="radio-cn">' + esc(item.cn || '') + '</div>'
+          : '<div class="quiz-hint">该场景暂无句子</div>') +
+        radioControls() +
+        '<div class="listen-controls">' +
+          '<label class="small muted"><input type="checkbox" id="radio-cn" ' + (radio.opts.cn ? 'checked' : '') + '> 读中文翻译</label>' +
+          '<label class="small muted">英文读 <select id="radio-times">' +
+            '<option value="1"' + optSel('times', 1) + '>1 遍</option>' +
+            '<option value="2"' + optSel('times', 2) + '>2 遍</option>' +
+            '<option value="3"' + optSel('times', 3) + '>3 遍</option>' +
+          '</select></label>' +
+          radioRateAndPos() +
+        '</div>' +
+      '</div>';
+    } else {
+      var w = item;
+      html += '<div class="panel panel-pad">' +
         '<div class="quiz-hint">连续播报「' + levelName(cardState.level) + '」的 ' + radio.list.length + ' 个单词：先读单词，再读中文释义和例句，自动循环。想听简单的，上面切「小学」或「四级」。</div>' +
         (w ? '<div class="radio-now">' +
           '<span class="wr-w">' + esc(w.w) + '</span>' +
@@ -347,53 +471,96 @@
           '<span class="wr-pos">' + esc(w.pos || '') + '</span>' +
           '<span class="wr-cn">' + esc(w.cn || '') + '</span></div>' +
           (w.ex ? '<div class="muted small" style="margin-top:6px">' + esc(w.ex) + '<br>' + esc(w.exCn || '') + '</div>' : '') : '') +
+        radioControls() +
         '<div class="listen-controls">' +
-          '<button class="btn btn-primary btn-sm" id="radio-toggle">' + (radio.playing ? '⏸ 暂停' : '▶ 开始') + '</button>' +
-          '<button class="btn btn-ghost btn-sm" id="radio-prev">上一个</button>' +
-          '<button class="btn btn-ghost btn-sm" id="radio-next">下一个</button>' +
-          '<button class="btn btn-ghost btn-sm" id="radio-shuffle">🔀 乱序重排</button>' +
-        '</div>' +
-        '<div class="listen-controls">' +
-          '<label class="small muted"><input type="checkbox" id="radio-cn" checked> 读中文释义</label>' +
-          '<label class="small muted"><input type="checkbox" id="radio-ex" checked> 读例句</label>' +
-          '<label class="small muted">语速 <select id="radio-rate">' +
-            '<option value="0.8">慢</option><option value="1" selected>常速</option><option value="1.25">快</option>' +
-          '</select></label>' +
-          '<span class="muted small">' + (radio.list.length ? (radio.idx + 1) + ' / ' + radio.list.length : '0 / 0') + '</span>' +
+          '<label class="small muted"><input type="checkbox" id="radio-cn" ' + (radio.opts.cn ? 'checked' : '') + '> 读中文释义</label>' +
+          '<label class="small muted"><input type="checkbox" id="radio-ex" ' + (radio.opts.ex ? 'checked' : '') + '> 读例句</label>' +
+          radioRateAndPos() +
         '</div>' +
       '</div>';
+    }
+    stage.innerHTML = html;
+
+    stage.querySelectorAll('[data-rsrc]').forEach(function (b) {
+      b.onclick = function () { switchRadioSrc(b.dataset.rsrc); };
+    });
+    stage.querySelectorAll('[data-rscene]').forEach(function (b) {
+      b.onclick = function () { switchRadioScene(b.dataset.rscene); };
+    });
     document.getElementById('radio-toggle').onclick = function () { radio.playing ? pauseRadio() : playRadio(); };
     document.getElementById('radio-prev').onclick = function () { stepRadio(-1); };
     document.getElementById('radio-next').onclick = function () { stepRadio(1); };
     document.getElementById('radio-shuffle').onclick = function () {
-      radio.list = shuffle(radio.list); radio.idx = 0;
+      rebuildRadioList(true); radio.idx = 0;
       if (radio.playing) { speechSynthesis.cancel(); playCurrent(); } else renderRadio();
     };
+    bindRadioOpts();
   }
-  function radioOpts() {
-    return {
-      cn: document.getElementById('radio-cn').checked,
-      ex: document.getElementById('radio-ex').checked,
-      rate: parseFloat(document.getElementById('radio-rate').value)
-    };
+  function radioControls() {
+    return '<div class="listen-controls">' +
+      '<button class="btn btn-primary btn-sm" id="radio-toggle">' + (radio.playing ? '⏸ 暂停' : '▶ 开始') + '</button>' +
+      '<button class="btn btn-ghost btn-sm" id="radio-prev">上一句</button>' +
+      '<button class="btn btn-ghost btn-sm" id="radio-next">下一句</button>' +
+      '<button class="btn btn-ghost btn-sm" id="radio-shuffle">🔀 乱序重排</button>' +
+    '</div>';
+  }
+  function radioRateAndPos() {
+    return '<label class="small muted">语速 <select id="radio-rate">' +
+        '<option value="0.8"' + optSel('rate', 0.8) + '>慢</option>' +
+        '<option value="1"' + optSel('rate', 1) + '>常速</option>' +
+        '<option value="1.25"' + optSel('rate', 1.25) + '>快</option>' +
+      '</select></label>' +
+      '<span class="muted small">' + (radio.list.length ? (radio.idx + 1) + ' / ' + radio.list.length : '0 / 0') + '</span>';
+  }
+  function bindRadioOpts() {
+    var cn = document.getElementById('radio-cn');
+    var ex = document.getElementById('radio-ex');
+    var times = document.getElementById('radio-times');
+    var rate = document.getElementById('radio-rate');
+    if (cn) cn.onchange = function () { radio.opts.cn = cn.checked; };
+    if (ex) ex.onchange = function () { radio.opts.ex = ex.checked; };
+    if (times) times.onchange = function () { radio.opts.times = parseInt(times.value, 10); };
+    if (rate) rate.onchange = function () { radio.opts.rate = parseFloat(rate.value); };
+  }
+  function switchRadioSrc(src) {
+    if (src === radio.src) return;
+    pauseRadio();
+    radio.src = src;
+    if (src === 'phrase' && !radio.scene) radio.scene = 'all';
+    saveRadioPrefs();
+    startRadio();
+  }
+  function switchRadioScene(id) {
+    if (id === radio.scene) return;
+    radio.scene = id;
+    saveRadioPrefs();
+    rebuildRadioList(false);
+    radio.idx = 0;
+    if (radio.playing) { speechSynthesis.cancel(); playCurrent(); } else renderRadio();
   }
   function playRadio() {
-    if (!radio.list.length) { toast('当前等级没有词条'); return; }
+    if (!radio.list.length) { toast(radio.src === 'phrase' ? '该场景没有句子' : '当前等级没有词条'); return; }
     if (!('speechSynthesis' in window)) { toast('当前浏览器不支持语音朗读'); return; }
     radio.playing = true;
     playCurrent();
   }
   function playCurrent() {
     if (!radio.playing) return;
-    var w = radio.list[radio.idx];
-    if (!w) { pauseRadio(); return; }
+    var item = radio.list[radio.idx];
+    if (!item) { pauseRadio(); return; }
     radio.gen++;
     renderRadio();
-    var opts = radioOpts();
-    var seq = [{ text: w.w, lang: 'en' }];
-    if (opts.cn && w.cn) seq.push({ text: String(w.cn).replace(/[；;].*$/, ''), lang: 'zh' }); // 释义只读第一条，免得太长
-    if (opts.ex && w.ex) seq.push({ text: w.ex, lang: 'en' });
-    playSeq(seq, 0, opts.rate, radio.gen);
+    var seq;
+    if (radio.src === 'phrase') {
+      seq = [];
+      for (var k = 0; k < radio.opts.times; k++) seq.push({ text: item.en, lang: 'en' });
+      if (radio.opts.cn && item.cn) seq.push({ text: item.cn, lang: 'zh' });
+    } else {
+      seq = [{ text: item.w, lang: 'en' }];
+      if (radio.opts.cn && item.cn) seq.push({ text: String(item.cn).replace(/[；;].*$/, ''), lang: 'zh' }); // 释义只读第一条，免得太长
+      if (radio.opts.ex && item.ex) seq.push({ text: item.ex, lang: 'en' });
+    }
+    playSeq(seq, 0, radio.opts.rate, radio.gen);
   }
   function playSeq(seq, i, rate, gen) {
     if (!radio.playing || gen !== radio.gen) return;
@@ -430,13 +597,14 @@
 
   /* ---------- 模式切换（闪卡/列表/随身听/拼写/同义替换） ---------- */
   var quiz = { list: [], idx: 0, score: 0, answered: false };
-  var MODES = ['card', 'list', 'radio', 'quiz', 'para'];
+  var MODES = ['card', 'list', 'radio', 'quiz', 'para', 'pick'];
   var currentMode = 'card';
   document.getElementById('mode-card').onclick = function () { enterMode('card'); };
   document.getElementById('mode-list').onclick = function () { enterMode('list'); };
   document.getElementById('mode-radio').onclick = function () { enterMode('radio'); };
   document.getElementById('mode-quiz').onclick = function () { enterMode('quiz'); };
   document.getElementById('mode-para').onclick = function () { enterMode('para'); };
+  document.getElementById('mode-pick').onclick = function () { enterMode('pick'); };
   function setMode(m) {
     currentMode = m;
     MODES.forEach(function (x) {
@@ -444,6 +612,10 @@
       document.getElementById('mode-' + x).className = 'btn btn-sm ' + (x === m ? 'btn-dark' : 'btn-ghost');
     });
     if (m !== 'radio') stopRadio(); // 离开随身听立刻停止播报
+    // 随身听·口语与选词建表都不用词汇等级/话题两排 chips
+    var hideChips = m === 'pick' || (m === 'radio' && radio.src === 'phrase');
+    document.getElementById('level-chips').style.display = hideChips ? 'none' : '';
+    document.getElementById('word-chips').style.display = hideChips ? 'none' : '';
   }
   function enterMode(m) {
     setMode(m);
@@ -452,15 +624,11 @@
     else if (m === 'radio') startRadio();
     else if (m === 'quiz') startQuiz();
     else if (m === 'para') startPara();
+    else if (m === 'pick') startPick();
   }
   function shuffle(a) { a = a.slice(); for (var i = a.length - 1; i > 0; i--) { var j = Math.floor(Math.random() * (i + 1)); var t = a[i]; a[i] = a[j]; a[j] = t; } return a; }
   function startQuiz() {
-    var pool;
-    if (cardState.level === 'ielts') {
-      pool = cardState.cat === 'all' ? D.WORDS : D.WORDS.filter(function (w) { return w.cat === cardState.cat; });
-    } else {
-      pool = levelList(cardState.level);
-    }
+    var pool = currentWordPool(); // 与闪卡/列表/随身听同一选词口径（含自定义词表）
     quiz.list = shuffle(pool).slice(0, Math.min(10, pool.length));
     quiz.idx = 0; quiz.score = 0; quiz.answered = false;
     renderQuiz();
@@ -574,6 +742,252 @@
       }
     };
   }
+
+  /* ---------- 选词建表：4 档词库勾选 → 存成自定义词表，作为新 tab 学习 ---------- */
+  var pickState = { level: '', kw: '', shown: 0 };
+  var pickSelected = []; // 勾选的单词字符串（跨难度累计，草稿持久化 store.pickDraft）
+  function startPick() {
+    if (!PICK) {
+      document.getElementById('word-pick-stage').innerHTML =
+        '<div class="panel panel-pad">选词组件未加载，请刷新页面重试。</div>';
+      return;
+    }
+    if (!pickState.level && VOCAB.LEVELS.length) pickState.level = VOCAB.LEVELS[0].id;
+    pickSelected = pickDraft();
+    pickState.kw = '';
+    pickState.shown = 0;
+    renderPick();
+  }
+  // 选词来源 = 4 档难度词库 + 已有自定义词表（新 tab 里还能再挑词存成更新的 tab）
+  function pickSources() {
+    var libs = VOCAB.LEVELS.map(function (l) {
+      return { id: l.id, name: l.name, count: (VOCAB.WORDS[l.id] || []).length, isSet: false };
+    });
+    var sets = getSets().map(function (s) {
+      return { id: 'set:' + s.id, name: '🧺 ' + s.name, count: s.words.length, isSet: true };
+    });
+    return libs.concat(sets);
+  }
+  function pickWords() {
+    var words = PICK.sourceWords(VOCAB, getSets(), pickState.level);
+    return PICK.matchWordList(VOCAB_INDEX, words, pickState.kw);
+  }
+  // 单词 → 它所属的自建词表名（已入库的词在词格里点金标）
+  function pickMembership() {
+    var m = {};
+    getSets().forEach(function (s) {
+      s.words.forEach(function (w) { (m[w] = m[w] || []).push(s.name); });
+    });
+    return m;
+  }
+  function renderPick() {
+    var stage = document.getElementById('word-pick-stage');
+    var tabs = pickSources().map(function (l) {
+      return '<button class="chip ' + (l.isSet ? 'chip-src-set ' : '') + (pickState.level === l.id ? 'on' : '') + '" data-plevel="' + l.id + '">' +
+        esc(l.name) + ' ' + l.count + '</button>';
+    }).join('');
+    stage.innerHTML =
+      '<div class="panel-pad" style="padding-bottom:0">' +
+        '<p class="muted small" style="margin:0 0 10px">从四个难度词库里勾选单词（格子第二行是中文释义，可跨档累计、可搜索；电脑上还能按住鼠标拖框批量选择），' +
+        '勾完存成自己的词表，它会作为新标签出现在上方词库行最右边，闪卡 / 列表 / 随身听 / 拼写测验都能用；在自建词表里还能再挑词存成更新的词表。选择自动存草稿，关掉页面也不丢。</p>' +
+        '<div class="chips" id="pick-levels">' + tabs + '</div>' +
+        '<div class="listen-controls">' +
+          '<input class="input" id="pick-search" placeholder="搜索英文或中文释义" autocomplete="off" style="max-width:280px">' +
+          '<span class="muted small" id="pick-count"></span>' +
+        '</div>' +
+      '</div>' +
+      '<div class="pick-grid" id="pick-grid"></div>' +
+      '<div style="margin:8px 0 90px;text-align:center"><button class="btn btn-ghost btn-sm" id="pick-more" style="display:none">加载更多</button></div>' +
+      '<div class="pick-bar" id="pick-bar"></div>';
+    var input = document.getElementById('pick-search');
+    input.value = pickState.kw;
+    input.addEventListener('input', function (e) {
+      pickState.kw = e.target.value;
+      pickState.shown = 0;
+      renderPickGrid();
+    });
+    document.getElementById('pick-more').onclick = function () {
+      pickState.shown += PICK.PICK_CHUNK;
+      renderPickGrid();
+    };
+    renderPickGrid();
+    renderPickBar();
+  }
+  function renderPickGrid() {
+    var words = pickWords();
+    var box = document.getElementById('pick-grid');
+    var slice = words.slice(0, pickState.shown + PICK.PICK_CHUNK);
+    var membership = pickMembership();
+    box.innerHTML = slice.map(function (w) {
+      var on = pickSelected.indexOf(w) >= 0;
+      var e = VOCAB_INDEX[w];
+      var cn = e ? (e[3] || '') : '';
+      var inSets = membership[w] || [];
+      var title = w + (cn ? ' · ' + cn : '') + (inSets.length ? '（已在：' + inSets.join('、') + '）' : '');
+      return '<button class="pick-word' + (on ? ' on' : '') + (!on && inSets.length ? ' in-set' : '') + '" data-pw="' + esc(w) + '" title="' + esc(title) + '">' +
+        '<span class="pw-en">' + esc(w) + '</span>' +
+        '<span class="pw-cn">' + esc(cn) + '</span>' +
+      '</button>';
+    }).join('');
+    document.getElementById('pick-count').textContent = '共 ' + words.length + ' 词 · 已加载 ' + slice.length;
+    var more = document.getElementById('pick-more');
+    more.style.display = slice.length < words.length ? '' : 'none';
+    more.textContent = '加载更多（还剩 ' + (words.length - slice.length) + '）';
+  }
+  function renderPickBar() {
+    var bar = document.getElementById('pick-bar');
+    var n = pickSelected.length;
+    var preview = pickSelected.slice(0, 8).join(', ') + (n > 8 ? ' …' : '');
+    var sets = getSets();
+    var appendHtml = sets.length
+      ? sets.map(function (s) {
+          return '<button class="btn btn-ghost btn-sm" data-pappend="' + s.id + '">＋ ' + esc(s.name) + '（' + s.words.length + '）</button>';
+        }).join('')
+      : '<span class="muted small">还没有自建词表</span>';
+    bar.innerHTML =
+      '<div class="pick-bar-main">' +
+        '<b>🧺 已选 <span id="pick-n">' + n + '</span> 个</b>' +
+        '<span class="muted small pick-preview" id="pick-preview">' + esc(preview || '点上方单词加入选择') + '</span>' +
+      '</div>' +
+      '<div class="pick-bar-actions">' +
+        '<button class="btn btn-ghost btn-sm" id="pick-clear" ' + (n ? '' : 'disabled') + '>清空</button>' +
+        appendHtml +
+        '<button class="btn btn-primary btn-sm" id="pick-save" ' + (n ? '' : 'disabled') + '>💾 保存为新词表</button>' +
+      '</div>';
+    document.getElementById('pick-clear').onclick = function () {
+      if (!pickSelected.length) return;
+      if (confirm('清空已勾选的 ' + pickSelected.length + ' 个单词？')) {
+        pickSelected = [];
+        savePickDraft([]);
+        renderPickGrid();
+        renderPickBar();
+      }
+    };
+    document.getElementById('pick-save').onclick = commitNewSet;
+    bar.querySelectorAll('[data-pappend]').forEach(function (b) {
+      b.onclick = function () { appendToSet(b.dataset.pappend); };
+    });
+  }
+  function commitNewSet() {
+    if (!pickSelected.length) { toast('还没有勾选任何单词'); return; }
+    var name = prompt('给新词表起个名字：', PICK.defaultSetName(getSets()));
+    if (name === null) return;
+    name = name.trim();
+    if (!name) { toast('名称不能为空'); return; }
+    var s = { id: 's' + Date.now().toString(36), name: name, words: pickSelected.slice() };
+    saveSets(getSets().concat(s));
+    savePickDraft([]);
+    toast('已创建词表「' + name + '」，' + s.words.length + ' 词');
+    cardState.level = 'set:' + s.id;
+    cardState.cat = 'all';
+    enterMode('card'); // 新词表作为新 tab 高亮，直接进入闪卡
+  }
+  function appendToSet(id) {
+    var s = findSet(id);
+    if (!s) return;
+    if (!pickSelected.length) { toast('还没有勾选任何单词'); return; }
+    var merged = PICK.mergeWords(s.words, pickSelected);
+    var added = merged.length - s.words.length;
+    saveSets(getSets().map(function (x) { return x.id === id ? { id: x.id, name: x.name, words: merged } : x; }));
+    savePickDraft([]);
+    toast('已加入「' + s.name + '」：新增 ' + added + ' 词，共 ' + merged.length + ' 词');
+    pickSelected = [];
+    renderPickGrid();
+    renderPickBar();
+  }
+  var pickDragged = false; // 框选松手后的 click 是拖曳尾声，不再当单击
+  document.getElementById('word-pick-stage').addEventListener('click', function (e) {
+    if (pickDragged) { pickDragged = false; return; }
+    var lv = e.target.closest('[data-plevel]');
+    if (lv) {
+      if (lv.dataset.plevel === pickState.level) return;
+      pickState.level = lv.dataset.plevel;
+      pickState.kw = '';
+      pickState.shown = 0;
+      renderPick();
+      return;
+    }
+    var wb = e.target.closest('[data-pw]');
+    if (wb) {
+      var w = wb.dataset.pw;
+      var i = pickSelected.indexOf(w);
+      if (i >= 0) { pickSelected.splice(i, 1); wb.classList.remove('on'); }
+      else { pickSelected.push(w); wb.classList.add('on'); }
+      savePickDraft(pickSelected);
+      renderPickBar();
+    }
+  });
+
+  /* 框选（鼠标）：词格上按住拖出矩形，碰到的单词批量加入；
+     起手按在已选词上则整框批量取消。触屏仍走点选（避免和滚屏打架）。 */
+  var lasso = null;
+  var LASSO_SLOP = 6;
+  document.getElementById('word-pick-stage').addEventListener('pointerdown', function (e) {
+    if (e.pointerType !== 'mouse') return;
+    var grid = e.target.closest('#pick-grid');
+    if (!grid) return;
+    pickDragged = false; // 新的按下开始：上一帧框选的吞 click 标记立即失效
+    var startCell = e.target.closest('.pick-word');
+    lasso = {
+      sx: e.clientX, sy: e.clientY,
+      removing: !!(startCell && startCell.classList.contains('on')),
+      base: pickSelected.slice(),
+      moved: false, grid: grid, el: null
+    };
+    e.preventDefault();
+  });
+  window.addEventListener('pointermove', function (e) {
+    if (!lasso) return;
+    if (!lasso.moved &&
+        Math.abs(e.clientX - lasso.sx) < LASSO_SLOP &&
+        Math.abs(e.clientY - lasso.sy) < LASSO_SLOP) return;
+    if (!lasso.moved) {
+      lasso.moved = true;
+      lasso.el = document.createElement('div');
+      lasso.el.className = 'pick-lasso';
+      lasso.grid.appendChild(lasso.el);
+    }
+    var gr = lasso.grid.getBoundingClientRect();
+    var x0 = Math.min(lasso.sx, e.clientX), y0 = Math.min(lasso.sy, e.clientY);
+    var x1 = Math.max(lasso.sx, e.clientX), y1 = Math.max(lasso.sy, e.clientY);
+    lasso.el.style.left = (x0 - gr.left) + 'px';
+    lasso.el.style.top = (y0 - gr.top) + 'px';
+    lasso.el.style.width = (x1 - x0) + 'px';
+    lasso.el.style.height = (y1 - y0) + 'px';
+    var cells = lasso.grid.querySelectorAll('.pick-word');
+    var hit = [];
+    cells.forEach(function (c) {
+      var r = c.getBoundingClientRect();
+      if (r.left < x1 && r.right > x0 && r.top < y1 && r.bottom > y0) hit.push(c.dataset.pw);
+    });
+    // 以起手瞬间的选择集为基线：命中词整体加入/移除；新增顺序按格子顺序追加
+    var hitSet = {};
+    hit.forEach(function (w) { hitSet[w] = true; });
+    var next;
+    if (lasso.removing) {
+      next = lasso.base.filter(function (w) { return !hitSet[w]; });
+    } else {
+      next = lasso.base.slice();
+      var seen = {};
+      next.forEach(function (w) { seen[w] = true; });
+      hit.forEach(function (w) { if (!seen[w]) { seen[w] = true; next.push(w); } });
+    }
+    pickSelected = next;
+    var sel = {};
+    next.forEach(function (w) { sel[w] = true; });
+    cells.forEach(function (c) { c.classList.toggle('on', !!sel[c.dataset.pw]); });
+  });
+  window.addEventListener('pointerup', function () {
+    if (!lasso) return;
+    if (lasso.moved) {
+      if (lasso.el && lasso.el.parentNode) lasso.el.parentNode.removeChild(lasso.el);
+      savePickDraft(pickSelected);
+      renderPickGrid(); // 重建以恢复金标（已入库）等派生样式
+      renderPickBar();
+      pickDragged = true;
+    }
+    lasso = null;
+  });
 
   /* ---------------- 听力 ---------------- */
   var lis = { level: 0, idx: 0, tries: 0, rate: 1, done: false };
@@ -1146,6 +1560,164 @@
   function stopAllRecorders() {
     Object.keys(recs).forEach(function (rid) { stopRecorder(rid); });
   }
+
+  /* ---------------- 安卓 App：版本徽章 + 朗读诊断面板 ---------------- */
+  function setupAndroidDiagnostics() {
+    if (!window.AndroidTts || !AndroidTts.getAppVersion) return;
+    var ver = '';
+    try { ver = AndroidTts.getAppVersion() || ''; } catch (e) { return; }
+
+    var badge = document.createElement('button');
+    badge.className = 'app-diag-badge';
+    badge.textContent = 'App v' + ver.replace('#', ' b') + ' · 🔊 朗读诊断';
+    badge.onclick = openDiag;
+    document.body.appendChild(badge);
+
+    var mask = document.createElement('div');
+    mask.className = 'app-diag-mask';
+    mask.style.display = 'none';
+    mask.innerHTML =
+      '<div class="app-diag-panel">' +
+        '<div class="app-diag-head"><b>朗读诊断</b><button class="btn btn-ghost btn-sm" id="diag-close">关闭</button></div>' +
+        '<div id="diag-body" class="app-diag-body">读取中…</div>' +
+        '<div class="app-diag-actions" id="diag-actions"></div>' +
+      '</div>';
+    document.body.appendChild(mask);
+    document.getElementById('diag-close').onclick = function () { mask.style.display = 'none'; };
+    mask.addEventListener('click', function (e) { if (e.target === mask) mask.style.display = 'none'; });
+
+    function row(label, val, bad) {
+      return '<div class="diag-row' + (bad ? ' diag-bad' : '') + '"><span>' + esc(label) +
+        '</span><b>' + esc(String(val)) + '</b></div>';
+    }
+    function langCodeText(c) {
+      if (c === -99) return '未探测';
+      if (c >= 0) return '✓ 可用 (' + c + ')';
+      if (c === -1) return '✗ 缺语音数据 (-1)';
+      if (c === -2) return '✗ 不支持 (-2)';
+      return String(c);
+    }
+    function render() {
+      var info;
+      try { info = JSON.parse(AndroidTts.getTtsDebug()); } catch (e) { info = { error: String(e) }; }
+      var html = '';
+      if (info.error) {
+        html = '<div class="diag-row diag-bad"><span>诊断错误</span><b>' + esc(info.error) + '</b></div>';
+      } else {
+        var volBad = info.mediaVol === 0;
+        html += row('安装包版本', info.version);
+        if (window.__androidTtsPolyfill) {
+          var pfMode = window.__androidTtsPolyfill.getMode();
+          html += row('朗读通道', pfMode === 'online'
+            ? '🌐 在线语音（系统引擎失效，自动兜底中）'
+            : '系统 TTS 引擎（失效会自动转在线）', pfMode === 'online');
+          if (pfMode === 'online') {
+            html += '<div class="diag-note diag-bad">系统引擎静默失效，朗读已自动改用在线语音（百度/有道，需联网）。'
+              + '装好可用引擎并试播正常后，点下方「恢复系统引擎朗读」。</div>';
+          }
+        }
+        html += row('TTS 引擎就绪', info.ready ? '✓ 是' : '✗ 否', !info.ready);
+        html += row('初始化状态', info.initStatus + (info.initStatus === 0 ? '（SUCCESS）' : ''), info.initStatus !== 0);
+        html += row('系统引擎', info.engine || '（默认）');
+        html += row('英式英语', langCodeText(info.avail && info.avail.enGB));
+        html += row('美式英语', langCodeText(info.avail && info.avail.enUS));
+        html += row('普通话', langCodeText(info.avail && info.avail.zhCN));
+        html += row('当前语言', info.currentLang + '（setLanguage rc=' + info.lastSetLangResult + '）');
+        html += row('媒体音量', info.mediaVol + ' / ' + info.mediaMax, volBad);
+        html += row('铃声模式', ['静音', '振动', '正常'][info.ringerMode] != null ? ['静音', '振动', '正常'][info.ringerMode] : info.ringerMode);
+        html += row('安全区(px)', '上' + info.insets.t + ' 下' + info.insets.b + ' 左' + info.insets.l + ' 右' + info.insets.r,
+          !(info.insets.t > 0));
+        if (volBad) {
+          html += '<div class="diag-note diag-bad">媒体音量为 0：TTS 走媒体声道会完全无声，点下面「媒体音量＋」或按机身音量键。</div>';
+        }
+        if (info.avail && info.avail.zhCN < 0) {
+          html += '<div class="diag-note diag-bad">普通话语音不可用：点「系统 TTS 设置」换引擎或下载中文语音数据。</div>';
+        }
+        if (info.noStart) {
+          html += '<div class="diag-note diag-bad">⚠ 引擎接单后 3 秒没有开始发声（' + esc(info.noStart) +
+            '）：当前引擎已静默失效（云引擎常见，如讯飞语音云）。请在下方换一个引擎后再点试播。</div>';
+        }
+        html += '<div id="diag-engines"></div>';
+        html += '<div class="diag-log-title">事件日志（最近）</div>';
+        html += '<pre class="diag-log">' + esc(((info.events || []).slice(-14)).join('\n') || '（暂无）') + '</pre>';
+      }
+      document.getElementById('diag-body').innerHTML = html;
+      renderEngines();
+    }
+    function renderEngines() {
+      var box = document.getElementById('diag-engines');
+      if (!box) return;
+      if (!AndroidTts.getEnginesJson) { box.innerHTML = ''; return; }
+      var list;
+      try { list = JSON.parse(AndroidTts.getEnginesJson()); } catch (e) { list = null; }
+      if (!list || !list.length) { box.innerHTML = '<div class="diag-note">未读到其它已安装引擎，可点「系统 TTS 设置」安装/启用。</div>'; return; }
+      var h = '<div class="diag-log-title">已安装 TTS 引擎（点按钮直接切换，切完自动重连）</div><div class="diag-engines">';
+      list.forEach(function (e) {
+        h += '<button type="button" class="btn btn-sm ' + (e.current ? 'btn-dark' : 'btn-ghost') +
+          '" data-pkg="' + encodeURIComponent(e.pkg) + '">' + esc(e.label) +
+          (e.current ? ' ✓当前' : '　切换') + '</button>';
+      });
+      h += '</div>';
+      box.innerHTML = h;
+      Array.prototype.forEach.call(box.querySelectorAll('button'), function (b) {
+        b.onclick = function () {
+          var pkg = decodeURIComponent(b.getAttribute('data-pkg'));
+          b.disabled = true;
+          b.textContent = '切换中…';
+          try { AndroidTts.switchEngine(pkg); } catch (e) {}
+          // 引擎重绑+初始化约 1-2.5s，到时刷新状态与引擎高亮
+          setTimeout(function () { render(); }, 2600);
+        };
+      });
+    }
+    function btn(id, text, fn) {
+      var b = document.createElement('button');
+      b.className = 'btn btn-ghost btn-sm'; b.id = id; b.textContent = text;
+      b.onclick = fn;
+      document.getElementById('diag-actions').appendChild(b);
+    }
+    function openDiag() {
+      mask.style.display = 'flex';
+      document.getElementById('diag-actions').innerHTML = '';
+      render();
+      btn('diag-en', '🔊 英文试播(直连引擎)', function () {
+        try { AndroidTts.ttsTest('Good morning. This is an English voice test.', 'en-GB'); } catch (e) {}
+        setTimeout(render, 1200);
+        setTimeout(render, 3600);   // 等 NO-START 看门狗结论
+      });
+      btn('diag-app-en', '🔊 应用朗读试播(当前通道)', function () {
+        try {
+          speechSynthesis.cancel();
+          var au = new SpeechSynthesisUtterance('Good morning. This is the in-app voice test.');
+          au.lang = 'en-GB';
+          speechSynthesis.speak(au);
+        } catch (e) {}
+        setTimeout(render, 1600);
+        setTimeout(render, 3600);
+      });
+      btn('diag-mode', '🌐 切换在线/系统朗读', function () {
+        if (!window.__androidTtsPolyfill) return;
+        var nowOnline = window.__androidTtsPolyfill.getMode() === 'online';
+        window.__androidTtsPolyfill.setMode(nowOnline ? 'auto' : 'online');
+        render();
+        toast(nowOnline ? '已恢复系统引擎优先（下一句生效）' : '已强制在线语音朗读（需联网）');
+      });
+      btn('diag-zh', '🔊 中文试播', function () {
+        try { AndroidTts.ttsTest('这是中文语音测试，一二三四五。', 'zh-CN'); } catch (e) {}
+        setTimeout(render, 1200);
+        setTimeout(render, 3600);
+      });
+      btn('diag-beep', '🔔 测试音（媒体声道）', function () {
+        try { AndroidTts.playBeep(); } catch (e) {}
+        setTimeout(render, 600);
+      });
+      btn('diag-volup', '媒体音量＋', function () { try { AndroidTts.volumeUp(); } catch (e) {} setTimeout(render, 300); });
+      btn('diag-voldown', '媒体音量－', function () { try { AndroidTts.volumeDown(); } catch (e) {} setTimeout(render, 300); });
+      btn('diag-refresh', '刷新状态', render);
+      btn('diag-settings', '系统 TTS 设置', function () { try { AndroidTts.openTtsSettings(); } catch (e) {} });
+    }
+  }
+  setupAndroidDiagnostics();
 
   /* ---------------- 初始化 ---------------- */
   renderWordChips();

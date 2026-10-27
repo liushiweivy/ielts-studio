@@ -1,0 +1,82 @@
+<!doctype html>
+<html lang="zh">
+<head><meta charset="utf-8"><title>tts-polyfill-harness</title></head>
+<body>
+<pre id="out">running…</pre>
+<script>
+// Browser integration harness for assets/www/android-tts.js.
+// Stubs the AndroidTts bridge + Audio (no real sound), exercises the
+// silent-engine → online failover path. Open with file:// in any browser.
+window.__ANDROID_TTS_GRACE_MS = 80;
+window.__calls = { speak: 0, cancel: 0 };
+window.__aud = [];
+window.AndroidTts = {
+  getVoicesJson: function () {
+    return '[{"name":"en-GB","lang":"en-GB","default":true},'
+      + '{"name":"zh-CN","lang":"zh-CN","default":false}]';
+  },
+  speak: function () { window.__calls.speak++; return 'u1'; },
+  cancel: function () { window.__calls.cancel++; }
+};
+window.Audio = function () {
+  var self = this;
+  this.onended = null; this.onerror = null;
+  this.play = function () { return Promise.resolve(); };
+  this.pause = function () {};
+  this.removeAttribute = function () {};
+  this.load = function () {};
+  Object.defineProperty(this, 'src', {
+    set: function (v) { self._src = v; window.__aud.push(v); },
+    get: function () { return self._src; }
+  });
+};
+</script>
+<script src="../app/src/main/assets/www/android-tts.js"></script>
+<script>
+(function () {
+  var out = [];
+  function check(name, cond, extra) {
+    out.push((cond ? 'PASS ' : 'FAIL ') + name + (extra ? ' — ' + extra : ''));
+  }
+  try {
+    check('polyfill replaced speechSynthesis',
+      String(window.speechSynthesis.speak).indexOf('native code') === -1);
+    check('voices exposed', speechSynthesis.getVoices().length === 2);
+
+    var endState = '';
+    var u = new SpeechSynthesisUtterance('Good morning. This is a failover test.');
+    u.lang = 'en-GB';
+    u.onend = function () { endState = 'end'; };
+    u.onerror = function () { endState = 'error'; };
+    speechSynthesis.speak(u);
+    check('native speak called first', window.__calls.speak === 1);
+    check('no audio before grace', window.__aud.length === 0);
+
+    setTimeout(function () {
+      var baidu = window.__aud.some(function (s) { return s.indexOf('fanyi.baidu.com/gettts') >= 0; });
+      var lanEn = window.__aud.some(function (s) { return /[?&]lan=en/.test(s); });
+      check('failover to Baidu after grace', baidu);
+      check('english lan=en', lanEn);
+      check('mode persisted online', localStorage.getItem('ielts_tts_mode_v1') === 'online');
+      check('native cancelled on takeover', window.__calls.cancel >= 1);
+      check('polyfill API exposed', !!window.__androidTtsPolyfill &&
+        window.__androidTtsPolyfill.getMode() === 'online');
+
+      // zh chunk url
+      var u2 = new SpeechSynthesisUtterance('这是中文测试');
+      u2.lang = 'zh-CN';
+      speechSynthesis.speak(u2);   // sticky mode: straight online, no native call
+      var zhUrl = window.__aud[window.__aud.length - 1];
+      check('sticky mode skips native', window.__calls.speak === 1);
+      check('chinese lan=zh', /[?&]lan=zh/.test(zhUrl));
+
+      document.getElementById('out').textContent =
+        (out.every(function (l) { return l.indexOf('PASS') === 0; }) ? 'ALL PASS\n' : 'HAS FAIL\n') + out.join('\n');
+    }, 300);
+  } catch (e) {
+    document.getElementById('out').textContent = 'HARNESS ERROR: ' + e + '\n' + out.join('\n');
+  }
+})();
+</script>
+</body>
+</html>

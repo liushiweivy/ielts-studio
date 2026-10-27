@@ -38,6 +38,25 @@ body {
 ::selection { background: var(--highlight); }
 
 /* ---------- 顶部 ---------- */
+/* 刘海/灵动岛安全区：安卓 App 内原生把 inset 注入 --app-inset-*（CSS 像素，
+   onPageFinished 及 insets 变化时推送）；浏览器/PWA 走 env(safe-area-inset-*)。
+   两条通道互斥，避免双倍留白 */
+html[data-android-app] .topbar {
+  padding-top: var(--app-inset-top, 0px);
+}
+html[data-android-app] body {
+  padding-left: var(--app-inset-left, 0px);
+  padding-right: var(--app-inset-right, 0px);
+  padding-bottom: var(--app-inset-bottom, 0px);
+}
+html:not([data-android-app]) .topbar {
+  padding-top: env(safe-area-inset-top);
+}
+html:not([data-android-app]) body {
+  padding-left: env(safe-area-inset-left);
+  padding-right: env(safe-area-inset-right);
+  padding-bottom: env(safe-area-inset-bottom);
+}
 .topbar {
   position: sticky; top: 0; z-index: 50;
   border-bottom: 1.5px solid var(--ink);
@@ -245,6 +264,27 @@ body {
   background: rgba(33,28,21,.03);
 }
 .radio-now .wr-w { font-size: 24px; }
+
+/* 随身听：来源切换 + 日常口语卡片 */
+.radio-src { display: flex; gap: 10px; flex-wrap: wrap; margin-bottom: 12px; }
+.radio-scene { margin-bottom: 16px; }
+.radio-card { text-align: center; }
+.radio-card .tag { margin-bottom: 14px; }
+.radio-en {
+  font-family: var(--font-serif);
+  font-size: clamp(20px, 1.4rem + 0.6vw, 27px);
+  line-height: 1.55;
+  font-weight: 700;
+  color: var(--ink);
+  margin: 4px 0 12px;
+}
+.radio-cn {
+  font-size: 15.5px;
+  line-height: 1.6;
+  color: var(--moss);
+  padding-bottom: 4px;
+}
+.radio-card .listen-controls { justify-content: center; }
 .flash-back .speak-btn { border-color: #e8a092; color: #e8a092; }
 .card-actions { display: flex; gap: 12px; }
 .card-actions .btn { flex: 1; }
@@ -473,3 +513,146 @@ body {
   background: rgba(192,69,47,.06); font-size: 13.5px; line-height: 1.6;
   color: var(--ink);
 }
+
+/* ---------- 安卓 App 版本徽章 + 朗读诊断面板 ---------- */
+.app-diag-badge {
+  position: fixed; right: 10px;
+  bottom: calc(var(--app-inset-bottom, 0px) + 12px);
+  z-index: 80;
+  font-family: var(--font-sans);
+  font-size: 12px; letter-spacing: .2px;
+  padding: 7px 11px;
+  border-radius: 99px;
+  border: 1px solid var(--ink);
+  background: rgba(33,28,21,.88);
+  color: var(--paper);
+  box-shadow: var(--shadow);
+  cursor: pointer;
+}
+.app-diag-mask {
+  position: fixed; inset: 0; z-index: 90;
+  background: rgba(33,28,21,.45);
+  display: flex; align-items: center; justify-content: center;
+  padding: calc(var(--app-inset-top, 0px) + 16px) 14px calc(var(--app-inset-bottom, 0px) + 16px);
+}
+.app-diag-panel {
+  width: 100%; max-width: 460px; max-height: 100%; overflow: auto;
+  background: var(--card); border: 1px solid var(--line); border-radius: var(--radius);
+  box-shadow: var(--shadow);
+}
+.app-diag-head {
+  position: sticky; top: 0; background: var(--card);
+  display: flex; align-items: center; justify-content: space-between;
+  padding: 12px 14px; border-bottom: 1px solid var(--line);
+}
+.app-diag-body { padding: 10px 14px; }
+.app-diag-actions {
+  position: sticky; bottom: 0; background: var(--card);
+  display: flex; flex-wrap: wrap; gap: 8px; padding: 10px 14px 14px;
+  border-top: 1px solid var(--line);
+}
+.diag-row {
+  display: flex; justify-content: space-between; gap: 12px;
+  font-size: 13.5px; padding: 5px 0; border-bottom: 1px dashed var(--line);
+}
+.diag-row span { color: var(--ink-soft); }
+.diag-row b { font-weight: 700; text-align: right; }
+.diag-row.diag-bad, .diag-note.diag-bad { color: var(--cinnabar); font-weight: 700; }
+.diag-note { margin: 10px 0; font-size: 13px; line-height: 1.6; padding: 8px 10px;
+  border-radius: 8px; background: rgba(192,69,47,.07); }
+.diag-engines { display: flex; flex-wrap: wrap; gap: 8px; margin: 6px 0 2px; }
+.diag-engines .btn { min-height: 38px; }
+.diag-log-title { margin: 12px 0 4px; font-size: 12.5px; color: var(--ink-faint); }
+.diag-log {
+  font-size: 11.5px; line-height: 1.55; white-space: pre-wrap; word-break: break-all;
+  background: rgba(33,28,21,.05); border-radius: 8px; padding: 8px 10px;
+  max-height: 180px; overflow: auto;
+}
+
+/* ---------------- 选词建表 ---------------- */
+.chip-set { position: relative; padding-right: 26px; border-style: dashed; }
+.chip-del {
+  position: absolute; top: -7px; right: -6px;
+  width: 17px; height: 17px; line-height: 15px; text-align: center;
+  border-radius: 50%; background: var(--cinnabar); color: #fff;
+  font-size: 12px; font-weight: 700; opacity: 0; transition: opacity .15s;
+}
+.chip-set:hover .chip-del, .chip-set .chip-del:focus-visible { opacity: 1; }
+
+.chip-src-set { border-style: dashed; }
+.pick-grid {
+  position: relative;
+  display: grid;
+  grid-template-columns: repeat(10, minmax(0, 1fr));
+  gap: 6px;
+  margin: 14px 2px;
+  user-select: none; -webkit-user-select: none;
+}
+.pick-word {
+  position: relative;
+  min-width: 0; padding: 6px 3px 5px;
+  font: inherit;
+  color: var(--ink); cursor: pointer;
+  background: var(--card); border: 1px solid var(--line); border-radius: 7px;
+  transition: background .12s, color .12s, border-color .12s, transform .08s;
+}
+.pick-word .pw-en, .pick-word .pw-cn {
+  display: block; padding: 0 3px;
+  overflow: hidden; text-overflow: ellipsis;
+}
+.pick-word .pw-en {
+  font-size: 11.5px; line-height: 1.25; white-space: normal;
+  word-break: break-word;
+  display: -webkit-box; -webkit-line-clamp: 2; -webkit-box-orient: vertical;
+  min-height: 2.5em;
+}
+.pick-word .pw-cn {
+  font-size: 10px; line-height: 1.35; color: var(--ink-faint); margin-top: 2px;
+  white-space: nowrap;
+}
+.pick-word:hover { border-color: var(--gold); }
+.pick-word.on {
+  background: var(--cinnabar); border-color: var(--cinnabar-deep);
+  color: #fbf3e6; font-weight: 700;
+}
+.pick-word.on .pw-en { font-weight: 700; }
+.pick-word.on .pw-cn { color: rgba(251, 243, 230, .82); }
+/* 已在某个自建词表里的词：金角标 */
+.pick-word.in-set { border-color: rgba(184, 137, 59, .65); }
+.pick-word.in-set::after {
+  content: ""; position: absolute; top: 3px; right: 3px;
+  width: 6px; height: 6px; border-radius: 50%; background: var(--gold);
+}
+.pick-word:active { transform: scale(.94); }
+/* 鼠标框选矩形 */
+.pick-lasso {
+  position: absolute; z-index: 5; pointer-events: none;
+  border: 1px solid var(--cinnabar);
+  background: rgba(192, 69, 47, .12);
+  border-radius: 3px;
+}
+@media (max-width: 1100px) { .pick-grid { grid-template-columns: repeat(6, minmax(0, 1fr)); } }
+@media (max-width: 560px) {
+  .pick-grid { grid-template-columns: repeat(4, minmax(0, 1fr)); gap: 5px; }
+  .pick-word .pw-en { font-size: 11.5px; }
+  /* 小屏操作条不悬浮（否则挡住来源 tabs），随内容走 */
+  .pick-bar { position: static; margin: 14px 0 0; border: 1px solid var(--line); border-top: 1.5px solid var(--ink); }
+}
+
+.pick-bar {
+  position: sticky; bottom: 0; z-index: 20;
+  display: flex; align-items: center; gap: 10px; flex-wrap: wrap;
+  background: rgba(251, 247, 238, .96);
+  backdrop-filter: blur(4px);
+  border-top: 1.5px solid var(--ink);
+  padding: 10px 14px calc(var(--app-inset-bottom, 0px) + 10px);
+  border-radius: 10px;
+  box-shadow: 0 -6px 18px rgba(33, 28, 21, .08);
+}
+.pick-bar-main { display: flex; align-items: baseline; gap: 10px; min-width: 0; flex: 1 1 220px; }
+.pick-bar-main b { font-size: 14.5px; white-space: nowrap; }
+.pick-preview {
+  overflow: hidden; text-overflow: ellipsis; white-space: nowrap; min-width: 0;
+}
+.pick-bar-actions { display: flex; align-items: center; gap: 8px; flex-wrap: wrap; }
+.btn:disabled, .btn[disabled] { opacity: .4; pointer-events: none; }
