@@ -580,49 +580,58 @@ html:not([data-android-app]) body {
 .chip-set:hover .chip-del, .chip-set .chip-del:focus-visible { opacity: 1; }
 
 .chip-src-set { border-style: dashed; }
+/* 选词建表铺满内容宽（.stage 默认 640 居中给闪卡用） */
+#word-pick-stage { max-width: none; }
 .pick-grid {
   position: relative;
   display: grid;
-  grid-template-columns: repeat(10, minmax(0, 1fr));
-  gap: 6px;
+  /* 自适应填满整行：每个词至少 118px 完整可读，剩余空间平均分配，右侧不留白 */
+  grid-template-columns: repeat(auto-fill, minmax(118px, 1fr));
+  gap: 7px;
   margin: 14px 2px;
   user-select: none; -webkit-user-select: none;
 }
 .pick-word {
   position: relative;
-  min-width: 0; padding: 6px 3px 5px;
+  min-width: 0; padding: 6px 4px 5px;
   font: inherit;
   color: var(--ink); cursor: pointer;
   background: var(--card); border: 1px solid var(--line); border-radius: 7px;
   transition: background .12s, color .12s, border-color .12s, transform .08s;
 }
-.pick-word .pw-en, .pick-word .pw-cn {
-  display: block; padding: 0 3px;
-  overflow: hidden; text-overflow: ellipsis;
-}
+.pick-word .pw-top { display: flex; align-items: flex-start; gap: 2px; padding: 0 2px; }
 .pick-word .pw-en {
-  font-size: 11.5px; line-height: 1.25; white-space: normal;
-  word-break: break-word;
-  display: -webkit-box; -webkit-line-clamp: 2; -webkit-box-orient: vertical;
-  min-height: 2.5em;
+  flex: 1; min-width: 0;
+  font-size: 12px; line-height: 1.3; font-weight: 600;
+  overflow-wrap: break-word; word-break: break-word; hyphens: auto;
+  display: -webkit-box; -webkit-line-clamp: 3; -webkit-box-orient: vertical;
+  overflow: hidden;
 }
+.pick-word .pw-speak {
+  flex: none; font-size: 11px; line-height: 1; padding: 1px 1px 0;
+  opacity: .5; transition: opacity .12s, transform .08s;
+}
+.pick-word .pw-speak:hover { opacity: 1; transform: scale(1.15); }
 .pick-word .pw-cn {
-  font-size: 10px; line-height: 1.35; color: var(--ink-faint); margin-top: 2px;
-  white-space: nowrap;
+  display: block; padding: 0 3px; margin-top: 2px;
+  font-size: 10.5px; line-height: 1.35; color: var(--ink-faint);
+  white-space: nowrap; overflow: hidden; text-overflow: ellipsis;
 }
 .pick-word:hover { border-color: var(--gold); }
 .pick-word.on {
   background: var(--cinnabar); border-color: var(--cinnabar-deep);
-  color: #fbf3e6; font-weight: 700;
+  color: #fbf3e6;
 }
 .pick-word.on .pw-en { font-weight: 700; }
 .pick-word.on .pw-cn { color: rgba(251, 243, 230, .82); }
+.pick-word.on .pw-speak { opacity: .9; }
 /* 已在某个自建词表里的词：金角标 */
 .pick-word.in-set { border-color: rgba(184, 137, 59, .65); }
 .pick-word.in-set::after {
-  content: ""; position: absolute; top: 3px; right: 3px;
+  content: ""; position: absolute; top: 4px; right: 3px;
   width: 6px; height: 6px; border-radius: 50%; background: var(--gold);
 }
+.pick-word.in-set .pw-speak { margin-right: 9px; }
 .pick-word:active { transform: scale(.94); }
 /* 鼠标框选矩形 */
 .pick-lasso {
@@ -631,14 +640,6 @@ html:not([data-android-app]) body {
   background: rgba(192, 69, 47, .12);
   border-radius: 3px;
 }
-@media (max-width: 1100px) { .pick-grid { grid-template-columns: repeat(6, minmax(0, 1fr)); } }
-@media (max-width: 560px) {
-  .pick-grid { grid-template-columns: repeat(4, minmax(0, 1fr)); gap: 5px; }
-  .pick-word .pw-en { font-size: 11.5px; }
-  /* 小屏操作条不悬浮（否则挡住来源 tabs），随内容走 */
-  .pick-bar { position: static; margin: 14px 0 0; border: 1px solid var(--line); border-top: 1.5px solid var(--ink); }
-}
-
 .pick-bar {
   position: sticky; bottom: 0; z-index: 20;
   display: flex; align-items: center; gap: 10px; flex-wrap: wrap;
@@ -648,6 +649,11 @@ html:not([data-android-app]) body {
   padding: 10px 14px calc(var(--app-inset-bottom, 0px) + 10px);
   border-radius: 10px;
   box-shadow: 0 -6px 18px rgba(33, 28, 21, .08);
+}
+@media (max-width: 560px) {
+  .pick-grid { grid-template-columns: repeat(auto-fill, minmax(104px, 1fr)); gap: 5px; }
+  /* 小屏操作条不悬浮（否则挡住来源 tabs），随内容走；必须在 .pick-bar 基础规则之后才压得住 */
+  .pick-bar { position: static; margin: 14px 0 0; border: 1px solid var(--line); border-top: 1.5px solid var(--ink); }
 }
 .pick-bar-main { display: flex; align-items: baseline; gap: 10px; min-width: 0; flex: 1 1 220px; }
 .pick-bar-main b { font-size: 14.5px; white-space: nowrap; }

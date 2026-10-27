@@ -758,10 +758,11 @@
     pickState.shown = 0;
     renderPick();
   }
-  // 选词来源 = 4 档难度词库 + 已有自定义词表（新 tab 里还能再挑词存成更新的 tab）
+  // 选词来源 = 按难度排序的 4 档词库 + 已有自定义词表（新 tab 里还能再挑词存成更新的 tab）
+  var PICK_LEVEL_NAME = { primary: '① 小学', cet4: '② 四级', cet6: '③ 六级', ieltsfull: '④ 雅思高阶' };
   function pickSources() {
     var libs = VOCAB.LEVELS.map(function (l) {
-      return { id: l.id, name: l.name, count: (VOCAB.WORDS[l.id] || []).length, isSet: false };
+      return { id: l.id, name: PICK_LEVEL_NAME[l.id] || l.name, count: (VOCAB.WORDS[l.id] || []).length, isSet: false };
     });
     var sets = getSets().map(function (s) {
       return { id: 'set:' + s.id, name: '🧺 ' + s.name, count: s.words.length, isSet: true };
@@ -788,8 +789,8 @@
     }).join('');
     stage.innerHTML =
       '<div class="panel-pad" style="padding-bottom:0">' +
-        '<p class="muted small" style="margin:0 0 10px">从四个难度词库里勾选单词（格子第二行是中文释义，可跨档累计、可搜索；电脑上还能按住鼠标拖框批量选择），' +
-        '勾完存成自己的词表，它会作为新标签出现在上方词库行最右边，闪卡 / 列表 / 随身听 / 拼写测验都能用；在自建词表里还能再挑词存成更新的词表。选择自动存草稿，关掉页面也不丢。</p>' +
+        '<p class="muted small" style="margin:0 0 10px">按难度分四档（① 小学 → ④ 雅思高阶）勾选单词，格子里英文完整显示、第二行是中文释义，点 🔊 直接发音；可跨档累计、可搜索；电脑上还能按住鼠标拖框批量选择。' +
+        '勾完存成自己的词表，它会作为新标签出现在上方词库行最右边，闪卡 / 列表 / 随身听 / 拼写测验都能用；在自建词表里还能再挑词存成更新的词表，也能把选中的词从词表里移出（单词仍在原词库）。选择自动存草稿，关掉页面也不丢。</p>' +
         '<div class="chips" id="pick-levels">' + tabs + '</div>' +
         '<div class="listen-controls">' +
           '<input class="input" id="pick-search" placeholder="搜索英文或中文释义" autocomplete="off" style="max-width:280px">' +
@@ -824,10 +825,11 @@
       var cn = e ? (e[3] || '') : '';
       var inSets = membership[w] || [];
       var title = w + (cn ? ' · ' + cn : '') + (inSets.length ? '（已在：' + inSets.join('、') + '）' : '');
-      return '<button class="pick-word' + (on ? ' on' : '') + (!on && inSets.length ? ' in-set' : '') + '" data-pw="' + esc(w) + '" title="' + esc(title) + '">' +
-        '<span class="pw-en">' + esc(w) + '</span>' +
+      return '<div class="pick-word' + (on ? ' on' : '') + (!on && inSets.length ? ' in-set' : '') + '" data-pw="' + esc(w) + '" title="' + esc(title) + '">' +
+        '<span class="pw-top"><span class="pw-en">' + esc(w) + '</span>' +
+        '<span class="pw-speak" data-pspeak="' + esc(w) + '" title="朗读" role="button">🔊</span></span>' +
         '<span class="pw-cn">' + esc(cn) + '</span>' +
-      '</button>';
+      '</div>';
     }).join('');
     document.getElementById('pick-count').textContent = '共 ' + words.length + ' 词 · 已加载 ' + slice.length;
     var more = document.getElementById('pick-more');
@@ -839,6 +841,8 @@
     var n = pickSelected.length;
     var preview = pickSelected.slice(0, 8).join(', ') + (n > 8 ? ' …' : '');
     var sets = getSets();
+    var srcSetId = pickState.level.indexOf('set:') === 0 ? pickState.level.slice(4) : '';
+    var srcSet = srcSetId ? findSet(srcSetId) : null;
     var appendHtml = sets.length
       ? sets.map(function (s) {
           return '<button class="btn btn-ghost btn-sm" data-pappend="' + s.id + '">＋ ' + esc(s.name) + '（' + s.words.length + '）</button>';
@@ -851,6 +855,7 @@
       '</div>' +
       '<div class="pick-bar-actions">' +
         '<button class="btn btn-ghost btn-sm" id="pick-clear" ' + (n ? '' : 'disabled') + '>清空</button>' +
+        (srcSet ? '<button class="btn btn-ghost btn-sm" id="pick-remove-set" ' + (n ? '' : 'disabled') + '>✂ 从「' + esc(srcSet.name) + '」移除</button>' : '') +
         appendHtml +
         '<button class="btn btn-primary btn-sm" id="pick-save" ' + (n ? '' : 'disabled') + '>💾 保存为新词表</button>' +
       '</div>';
@@ -864,9 +869,27 @@
       }
     };
     document.getElementById('pick-save').onclick = commitNewSet;
+    var removeBtn = document.getElementById('pick-remove-set');
+    if (removeBtn) removeBtn.onclick = removeFromCurrentSet;
     bar.querySelectorAll('[data-pappend]').forEach(function (b) {
       b.onclick = function () { appendToSet(b.dataset.pappend); };
     });
+  }
+  // 自建词表来源下：把选中词从该表移除（单词本身仍在原难度词库里）
+  function removeFromCurrentSet() {
+    if (pickState.level.indexOf('set:') !== 0 || !pickSelected.length) return;
+    var id = pickState.level.slice(4);
+    var s = findSet(id);
+    if (!s) return;
+    var cut = {};
+    pickSelected.forEach(function (w) { cut[w] = true; });
+    var remain = s.words.filter(function (w) { return !cut[w]; });
+    var removed = s.words.length - remain.length;
+    saveSets(getSets().map(function (x) { return x.id === id ? { id: x.id, name: x.name, words: remain } : x; }));
+    pickSelected = [];
+    savePickDraft([]);
+    toast('已从「' + s.name + '」移除 ' + removed + ' 词（单词仍在原词库），剩 ' + remain.length);
+    renderPick();
   }
   function commitNewSet() {
     if (!pickSelected.length) { toast('还没有勾选任何单词'); return; }
@@ -898,6 +921,8 @@
   var pickDragged = false; // 框选松手后的 click 是拖曳尾声，不再当单击
   document.getElementById('word-pick-stage').addEventListener('click', function (e) {
     if (pickDragged) { pickDragged = false; return; }
+    var spk = e.target.closest('[data-pspeak]');
+    if (spk) { e.stopPropagation(); speak(spk.dataset.pspeak); return; }
     var lv = e.target.closest('[data-plevel]');
     if (lv) {
       if (lv.dataset.plevel === pickState.level) return;
@@ -924,6 +949,7 @@
   var LASSO_SLOP = 6;
   document.getElementById('word-pick-stage').addEventListener('pointerdown', function (e) {
     if (e.pointerType !== 'mouse') return;
+    if (e.target.closest('[data-pspeak]')) return; // 点喇叭不起框选
     var grid = e.target.closest('#pick-grid');
     if (!grid) return;
     pickDragged = false; // 新的按下开始：上一帧框选的吞 click 标记立即失效
