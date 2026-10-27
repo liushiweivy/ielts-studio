@@ -1,0 +1,79 @@
+/* 雅思书房 · 全局样式（暖纸学院风） */
+page {
+  --paper: #f5efe2;
+  --card: #fbf7ee;
+  --ink: #211c15;
+  --ink-soft: #5b5144;
+  --ink-faint: #8d8170;
+  --line: #ddd2bb;
+  --cinnabar: #c0452f;
+  --cinnabar-deep: #9c3421;
+  --moss: #2f6049;
+  --gold: #b8893b;
+  background: #f5efe2;
+  color: #211c15;
+  font-family: -apple-system, "PingFang SC", "Noto Sans SC", "Microsoft YaHei", sans-serif;
+  font-size: 28rpx;
+  line-height: 1.65;
+}
+
+.serif { font-family: "Songti SC", "Noto Serif SC", "SimSun", Georgia, serif; font-weight: 800; }
+.muted { color: #8d8170; }
+.small { font-size: 23rpx; }
+
+.page-pad { padding: 32rpx 28rpx 60rpx; }
+
+.eyebrow {
+  display: inline-block; font-size: 22rpx; letter-spacing: 6rpx;
+  color: #c0452f; font-weight: 700; margin-bottom: 8rpx;
+}
+.h-title { font-size: 46rpx; font-weight: 900; line-height: 1.25; margin-bottom: 10rpx; }
+.h-sub { color: #5b5144; font-size: 25rpx; margin-bottom: 28rpx; }
+
+.panel {
+  background: #fbf7ee; border: 1rpx solid #ddd2bb; border-radius: 22rpx;
+  box-shadow: 0 2rpx 0 rgba(33,28,21,.05), 0 16rpx 40rpx -24rpx rgba(33,28,21,.35);
+}
+.panel-pad { padding: 32rpx; }
+
+.tag {
+  display: inline-block; font-size: 20rpx; font-weight: 700; letter-spacing: 1rpx;
+  padding: 4rpx 14rpx; border-radius: 8rpx; background: #efe7d5; color: #5b5144;
+  border: 1rpx solid #ddd2bb;
+}
+.tag-red { background: rgba(192,69,47,.1); color: #9c3421; border-color: rgba(192,69,47,.3); }
+.tag-green { background: rgba(47,96,73,.1); color: #2f6049; border-color: rgba(47,96,73,.3); }
+
+.chips { display: flex; flex-wrap: wrap; gap: 14rpx; margin-bottom: 28rpx; }
+.chip {
+  border: 2rpx solid #ddd2bb; background: #fbf7ee; color: #5b5144;
+  border-radius: 999rpx; padding: 10rpx 26rpx; font-size: 24rpx; line-height: 1.4;
+}
+.chip.on { background: #211c15; border-color: #211c15; color: #f5efe2; }
+
+.btn {
+  display: inline-flex; align-items: center; justify-content: center;
+  border-radius: 16rpx; border: 2rpx solid #211c15; padding: 16rpx 30rpx;
+  font-size: 27rpx; font-weight: 700; background: #fbf7ee; color: #211c15; line-height: 1.4;
+}
+.btn-primary { background: #c0452f; border-color: #9c3421; color: #fff6ee; }
+.btn-dark { background: #211c15; border-color: #211c15; color: #f5efe2; }
+.btn-ghost { border-color: #ddd2bb; color: #5b5144; background: #fbf7ee; }
+.btn-sm { padding: 10rpx 22rpx; font-size: 24rpx; border-radius: 12rpx; }
+.btn-block { width: 100%; }
+button::after { border: none; }
+
+.bar-row { display: flex; align-items: center; gap: 18rpx; margin-bottom: 22rpx; }
+.progress-line { flex: 1; height: 10rpx; border-radius: 999rpx; background: #efe7d5; overflow: hidden; }
+.progress-line .fill { display: block; height: 100%; background: #2f6049; border-radius: 999rpx; }
+.count { font-size: 23rpx; color: #5b5144; white-space: nowrap; }
+
+.input {
+  width: 100%; border: 2rpx solid #ddd2bb; border-radius: 14rpx; padding: 20rpx 24rpx;
+  font-size: 28rpx; background: #fffdf8; box-sizing: border-box;
+}
+.input.good { border-color: #2f6049; background: rgba(47,96,73,.06); }
+.input.bad { border-color: #c0452f; background: rgba(192,69,47,.06); }
+.fb { margin-top: 16rpx; font-size: 25rpx; min-height: 36rpx; }
+.fb-ok { color: #2f6049; font-weight: 700; }
+.fb-no { color: #c0452f; font-weight: 700; }

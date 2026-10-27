@@ -1,0 +1,48 @@
+<view class="page-pad">
+  <!-- 文章列表 -->
+  <block wx:if="{{mode === 'list'}}">
+    <view class="eyebrow">READING</view>
+    <view class="h-title serif">真题题型精练</view>
+    <view class="h-sub">只有出现明确相反信息才是 FALSE，没提到一律 NOT GIVEN。</view>
+    <view wx:for="{{list}}" wx:key="id" class="panel panel-pad passage-row" data-id="{{item.id}}" bindtap="open">
+      <view class="row-idx serif">{{item.idx}}</view>
+      <view style="flex:1">
+        <view class="serif" style="font-size:32rpx">{{item.title}}</view>
+        <view class="muted small" style="margin-top:6rpx">{{item.topic}} · 建议 {{item.minutes}} 分钟 · {{item.qn}} 题</view>
+      </view>
+      <view class="tag {{item.done ? 'tag-green' : ''}}">{{item.done ? '已完成 ' + item.best + '/' + item.qn : '未做'}}</view>
+    </view>
+  </block>
+
+  <!-- 做题 -->
+  <block wx:if="{{mode === 'practice'}}">
+    <view class="practice-bar">
+      <button class="btn btn-ghost btn-sm" bindtap="back">← 列表</button>
+      <button wx:if="{{!graded}}" class="btn btn-primary btn-sm" bindtap="grade">提交批改</button>
+      <button wx:else class="btn btn-dark btn-sm" bindtap="redo">重新做</button>
+    </view>
+    <view wx:if="{{graded}}" class="score-line serif">得分 {{score}} / {{total}}</view>
+
+    <view class="panel panel-pad" style="margin-bottom:22rpx">
+      <view class="serif passage-title">{{practice.title}}</view>
+      <view class="muted small" style="margin:6rpx 0 18rpx">{{practice.topic}} · ACADEMIC READING</view>
+      <view wx:for="{{practice.paragraphs}}" wx:key="index" class="paragraph">{{item}}</view>
+    </view>
+
+    <view class="panel panel-pad">
+      <view class="serif" style="font-size:32rpx;margin-bottom:10rpx">Questions 1–{{total}}</view>
+      <view wx:for="{{practice.questions}}" wx:key="stem" wx:for-item="q" wx:for-index="qi" class="q-item">
+        <view class="q-stem"><text class="qn">{{qi + 1}}.</text> {{q.stem}}
+          <text wx:if="{{q.type === 'tfng'}}" class="muted small">（TRUE / FALSE / NOT GIVEN）</text>
+        </view>
+        <view wx:for="{{q.options}}" wx:key="key" wx:for-item="opt"
+              class="opt {{graded ? (opt.key === q.answer ? 'correct' : (opt.key === q.chosen ? 'wrong' : '')) : (opt.key === q.chosen ? 'picked' : '')}}"
+              data-qi="{{qi}}" data-key="{{opt.key}}" bindtap="choose">
+          <text class="opt-label">{{opt.label}}</text>
+          <text wx:if="{{q.type === 'mc'}}" class="opt-text">{{opt.text}}</text>
+        </view>
+        <view wx:if="{{graded}}" class="q-why"><text class="why-tag">答案 {{q.answer}}</text> {{q.why}}</view>
+      </view>
+    </view>
+  </block>
+</view>

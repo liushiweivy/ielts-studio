@@ -1,0 +1,24 @@
+版权所有 (c) 2026 liushiweivy。保留所有权利。
+
+未经版权持有者书面许可，禁止以任何形式使用、复制、修改、合并、发布、
+分发、再许可或销售本软件及其衍生作品；明确禁止任何商业用途。
+
+本仓库公开仅作学习交流目的，查看代码不构成任何授权。
+
+Copyright (c) 2026 liushiweivy. All rights reserved.
+Commercial use, redistribution, and modification without written permission
+are strictly prohibited.
+
+================================================================================
+
+第三方词库数据声明：
+本仓库 web/js/vocab-levels.js、miniprogram/utils/vocab-levels.js 及
+android/app/src/main/assets/www/js/vocab-levels.js 由构建脚本
+web/tools/build-vocab.js 从 KyleBing/english-vocabulary
+(https://github.com/KyleBing/english-vocabulary) 的 jsonl 词库转换生成，
+该数据遵循 BSD 3-Clause License，版权归原作者所有：
+
+  Copyright (c), KyleBing. All rights reserved.
+
+词库源文件（tools/vocab-src/*.jsonl，约 42MB）未包含在本仓库内，
+可按 web/README.md 的说明从上游仓库自行下载。

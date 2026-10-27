@@ -1,0 +1,20 @@
+# 词库源数据（BSD-3，约 42MB，需自行从上游下载，见 web/README.md）
+web/tools/vocab-src/
+
+# Android 构建产物与本机配置
+android/.gradle/
+android/build/
+android/app/build/
+android/local.properties
+android/launch.ini
+*.apk.idsig
+
+# 依赖
+node_modules/
+
+# IDE / 系统
+.idea/
+.vscode/
+.DS_Store
+Thumbs.db
+*.log

@@ -1,0 +1,65 @@
+<view class="page-pad">
+  <view class="eyebrow">SPEAKING</view>
+  <view class="h-title serif">口语题卡训练</view>
+  <view class="h-sub">Part 2 严格计时并录音回听；Part 1/3 点击题目展开。</view>
+
+  <!-- Part 2 -->
+  <view class="part-label"><view class="bar">P2</view><view class="serif part-h">个人长独白 Cue Cards</view></view>
+
+  <view wx:for="{{cues}}" wx:key="id" class="cue-card">
+    <view class="cue-badge">PART 2</view>
+    <view class="serif cue-title">{{item.cue}}</view>
+    <view class="muted small" style="margin-bottom:8rpx">You should say:</view>
+    <view wx:for="{{item.bullets}}" wx:key="*this" wx:for-item="b" class="cue-bullet">· {{b}}</view>
+
+    <view class="cue-timer">
+      <view class="phase">
+        <text wx:if="{{activeId === item.id}}">{{phase}}</text>
+        <text wx:else>准备 60 秒</text>
+      </view>
+      <view class="clock {{activeId === item.id ? cls : 'prep'}}">{{activeId === item.id ? clock : '1:00'}}</view>
+      <view wx:if="{{activeId === item.id && recording}}" class="rec"><text class="dot"></text>录音中</view>
+    </view>
+
+    <view class="cue-btns">
+      <button class="btn btn-dark btn-sm" data-id="{{item.id}}" bindtap="startPrep">⏱ 开始准备</button>
+      <button class="btn btn-primary btn-sm" data-id="{{item.id}}" bindtap="startSpeak">🎙 录音作答</button>
+    </view>
+
+    <view wx:if="{{recForId === item.id && recPath}}" class="playback">
+      <text class="muted small">回听你的作答：</text>
+      <button class="btn btn-ghost btn-sm" bindtap="playBack">▶ 播放录音</button>
+    </view>
+
+    <view class="model-toggle" data-id="{{item.id}}" bindtap="toggleCue">{{item.showModel ? '▾ 收起示范答案' : '📖 查看 7 分示范答案'}}</view>
+    <view wx:if="{{item.showModel}}" class="model-text">{{item.model}}</view>
+  </view>
+
+  <!-- Part 1 -->
+  <view class="part-label" style="margin-top:44rpx"><view class="bar">P1</view><view class="serif part-h">日常问答（点击看范例）</view></view>
+  <view class="panel panel-pad">
+    <view wx:for="{{part1}}" wx:key="topic" wx:for-item="g" wx:for-index="gi">
+      <view class="p1-topic serif">{{g.icon}} {{g.topic}}</view>
+      <view wx:for="{{g.items}}" wx:key="q" wx:for-item="it" wx:for-index="ii" class="faq">
+        <view class="faq-q" data-gi="{{gi}}" data-ii="{{ii}}" bindtap="toggleP1">
+          <text>{{it.q}}</text><text class="faq-sign">{{it.open ? '−' : '+'}}</text>
+        </view>
+        <view wx:if="{{it.open}}" class="faq-a">{{it.a}}</view>
+      </view>
+    </view>
+  </view>
+
+  <!-- Part 3 -->
+  <view class="part-label" style="margin-top:44rpx"><view class="bar">P3</view><view class="serif part-h">抽象讨论 · 答题要点</view></view>
+  <view class="panel panel-pad">
+    <view wx:for="{{part3}}" wx:key="q" wx:for-item="p" wx:for-index="pi" class="faq">
+      <view class="faq-q" data-i="{{pi}}" bindtap="toggleP3">
+        <text>{{pi + 1}}. {{p.q}}</text><text class="faq-sign">{{p.open ? '−' : '+'}}</text>
+      </view>
+      <view wx:if="{{p.open}}" class="tip3">
+        <view style="font-weight:700;margin-bottom:6rpx">答题骨架</view>
+        <view wx:for="{{p.tips}}" wx:key="*this" wx:for-item="t" class="cue-bullet">· {{t}}</view>
+      </view>
+    </view>
+  </view>
+</view>

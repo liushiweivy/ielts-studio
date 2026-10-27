@@ -1,0 +1,63 @@
+.page-pad { padding-top: 28rpx; }
+
+.hero {
+  position: relative; overflow: hidden;
+  background: #211c15; color: #f5efe2;
+  border-radius: 24rpx; padding: 40rpx 34rpx 44rpx; margin-bottom: 22rpx;
+}
+.hero-stamp {
+  align-self: flex-start; display: inline-block;
+  border: 2rpx solid #c0452f; color: #e8a092;
+  font-size: 20rpx; letter-spacing: 4rpx; padding: 6rpx 16rpx;
+  border-radius: 8rpx; transform: rotate(2deg);
+}
+.hero-title { font-size: 52rpx; margin: 22rpx 0 12rpx; }
+.hero-sub { color: rgba(245,239,226,.72); font-size: 25rpx; position: relative; z-index: 1; }
+.hero-watermark {
+  position: absolute; right: -10rpx; bottom: -80rpx;
+  font-size: 300rpx; color: rgba(245,239,226,.06); line-height: 1;
+}
+
+.streak {
+  display: flex; align-items: center; gap: 24rpx; margin-bottom: 22rpx;
+}
+.flame {
+  width: 100rpx; height: 100rpx; border-radius: 50%; flex: none;
+  display: flex; align-items: center; justify-content: center; font-size: 46rpx;
+  background: radial-gradient(circle at 35% 30%, #f6c667, #c0452f 72%);
+}
+.streak-num { font-size: 56rpx; line-height: 1; }
+
+.grid { display: flex; flex-wrap: wrap; gap: 18rpx; margin-bottom: 22rpx; }
+.mod { width: calc(50% - 9rpx); box-sizing: border-box; position: relative; min-height: 230rpx; }
+.mod-no { position: absolute; top: 24rpx; right: 26rpx; letter-spacing: 4rpx; }
+.mod-title { font-size: 34rpx; margin-top: 8rpx; }
+.mod-desc { margin-top: 8rpx; line-height: 1.5; }
+.ring {
+  width: 96rpx; height: 96rpx; border-radius: 50%; margin-top: 18rpx;
+  display: flex; align-items: center; justify-content: center;
+}
+.ring-inner {
+  width: 70rpx; height: 70rpx; border-radius: 50%; background: #fbf7ee;
+  display: flex; align-items: center; justify-content: center;
+}
+.ring-inner text { font-size: 21rpx; font-weight: 700; }
+.mod-emoji { position: absolute; right: 26rpx; bottom: 26rpx; font-size: 52rpx; }
+
+.speak-entry {
+  display: flex; align-items: center; justify-content: space-between;
+  margin-bottom: 22rpx; background: #2f6049; border-color: #2f6049;
+}
+.speak-entry .serif { color: #f0ead9; }
+.speak-entry .muted { color: rgba(240,234,217,.75); }
+.entry-go {
+  color: #f3dfa8; font-size: 48rpx; font-weight: 800; padding-left: 16rpx;
+}
+
+.daily { margin-bottom: 22rpx; }
+
+.tip-box {
+  background: #efe7d5; border-radius: 22rpx; padding: 30rpx 32rpx;
+  font-family: "Songti SC", "Noto Serif SC", serif; font-size: 28rpx;
+}
+.tip-q { font-size: 60rpx; line-height: .6; color: rgba(33,28,21,.25); margin-bottom: 10rpx; }

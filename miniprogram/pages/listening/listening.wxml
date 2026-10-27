@@ -1,0 +1,39 @@
+<view class="page-pad">
+  <view class="eyebrow">LISTENING</view>
+  <view class="h-title serif">句子精听填空</view>
+  <view class="h-sub">播放整句，填入缺失单词；每句最多播放 5 次。语音来自微信同声传译插件。</view>
+
+  <view class="chips">
+    <view wx:for="{{chips}}" wx:key="id" class="chip {{item.on ? 'on' : ''}}" data-id="{{item.id}}" bindtap="pickLevel">{{item.name}}</view>
+  </view>
+
+  <view class="bar-row">
+    <text class="count">{{idx + 1}} / {{total}}</text>
+    <view class="progress-line"><view class="fill" style="width:{{pct}}%"></view></view>
+    <view class="tag tag-red">{{stars}}</view>
+  </view>
+
+  <view class="panel panel-pad">
+    <view class="listen-controls">
+      <button class="btn btn-primary btn-sm" bindtap="play">🔊 播放句子</button>
+      <text class="muted small">剩余 {{triesLeft}} 次</text>
+    </view>
+
+    <view class="sentence serif">
+      <text wx:for="{{parts}}" wx:key="index" wx:for-item="p" wx:for-index="pi">
+        <text wx:if="{{p.t === 'text'}}">{{p.v}}</text>
+        <text wx:else class="blank {{p.v ? (p.ok ? 'blank-ok' : 'blank-no') : ''}}">{{p.v || '＿＿＿＿＿'}}</text>
+      </text>
+    </view>
+
+    <input class="input {{done ? (fbOk ? 'good' : 'bad') : ''}}" value="{{input}}" bindinput="onInput" placeholder="输入听到的缺失单词" confirm-type="done" bindconfirm="submit" />
+    <view class="fb {{fbOk ? 'fb-ok' : (done ? 'fb-no' : '')}}">{{fbText}}</view>
+    <view wx:if="{{done}}" class="muted small" style="margin-top:6rpx">{{cn}}</view>
+
+    <view class="listen-actions">
+      <button class="btn btn-primary btn-sm" bindtap="submit">提交</button>
+      <button wx:if="{{!done}}" class="btn btn-ghost btn-sm" bindtap="reveal">直接看答案</button>
+      <button class="btn btn-ghost btn-sm" bindtap="next">{{idx === total - 1 ? '回到第一题' : '下一句 →'}}</button>
+    </view>
+  </view>
+</view>

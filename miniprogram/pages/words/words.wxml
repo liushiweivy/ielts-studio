@@ -1,0 +1,144 @@
+<view class="page-pad">
+  <view class="eyebrow">VOCABULARY</view>
+  <view class="h-title serif">词汇闪卡</view>
+  <view class="h-sub">雅思核心 + 小学 / 四级 / 六级全量词库。点卡片翻面，点喇叭听发音。</view>
+
+  <scroll-view scroll-x class="chip-scroll" enhanced show-scrollbar="{{false}}">
+    <view class="chips chip-line" style="margin-bottom:8rpx">
+      <view wx:for="{{levels}}" wx:key="id" class="chip {{item.on ? 'on' : ''}}" data-id="{{item.id}}" bindtap="tapLevel">{{item.name}}</view>
+    </view>
+  </scroll-view>
+
+  <scroll-view wx:if="{{chips.length}}" scroll-x class="chip-scroll" enhanced show-scrollbar="{{false}}">
+    <view class="chips chip-line">
+      <view wx:for="{{chips}}" wx:key="id" class="chip {{item.on ? 'on' : ''}}" data-id="{{item.id}}" bindtap="tapChip">{{item.name}}</view>
+    </view>
+  </scroll-view>
+
+  <view class="mode-switch">
+    <button class="btn btn-sm {{mode === 'card' ? 'btn-dark' : 'btn-ghost'}}" bindtap="switchCard">🗂 闪卡</button>
+    <button class="btn btn-sm {{mode === 'quiz' ? 'btn-dark' : 'btn-ghost'}}" bindtap="switchQuiz">⌨ 拼写测验</button>
+    <button class="btn btn-sm {{mode === 'para' ? 'btn-dark' : 'btn-ghost'}}" bindtap="switchPara">🔁 同义替换</button>
+  </view>
+
+  <!-- 闪卡模式 -->
+  <block wx:if="{{mode === 'card'}}">
+    <block wx:if="{{finished}}">
+      <view class="panel panel-pad finish">
+        <view class="finish-emoji">🎉</view>
+        <view>本组卡片过完了！</view>
+        <view class="muted small" style="margin:10rpx 0 24rpx">去拼写测验检验，或换个话题继续。</view>
+        <view style="display:flex;gap:16rpx">
+          <button class="btn btn-primary btn-sm" bindtap="toQuiz">开始拼写测验</button>
+          <button class="btn btn-ghost btn-sm" bindtap="replay">再过一遍</button>
+        </view>
+      </view>
+    </block>
+
+    <block wx:else>
+      <view class="bar-row">
+        <text class="count">{{idx + 1}} / {{total}}</text>
+        <view class="progress-line"><view class="fill" style="width:{{pct}}%"></view></view>
+        <view class="tag {{isKnown ? 'tag-green' : ''}}">{{isKnown ? '已掌握' : '未掌握'}}</view>
+      </view>
+
+      <view class="flashcard {{flipped ? 'flipped' : ''}}" bindtap="flip">
+        <view class="flash-inner">
+          <!-- 正面 -->
+          <view class="flash-face flash-front">
+            <view class="flash-top">
+              <view class="tag">{{card.catName || ''}}</view>
+              <button class="speak" catchtap="speak" data-text="{{card.w}}">🔊</button>
+            </view>
+            <view class="flash-word serif">{{card.w}}</view>
+            <view class="flash-ph">{{card.ph}} <text class="flash-pos">{{card.pos}}</text></view>
+            <view class="flash-hint muted small">点击卡片翻面看释义</view>
+          </view>
+          <!-- 背面 -->
+          <view class="flash-face flash-back">
+            <view class="flash-top">
+              <view class="tag tag-red">{{card.catName || ''}}</view>
+              <button wx:if="{{card.ex}}" class="speak speak-light" catchtap="speak" data-text="{{card.ex}}">🔊</button>
+            </view>
+            <view class="flash-cn serif">{{card.cn}}</view>
+            <block wx:if="{{card.ex}}">
+              <view class="flash-ex">{{card.ex}}</view>
+              <view class="flash-excn">{{card.exCn}}</view>
+            </block>
+            <view class="flash-hint small" style="color:rgba(245,239,226,.5)">再点一次翻回正面</view>
+          </view>
+        </view>
+      </view>
+
+      <view class="card-actions">
+        <button class="btn btn-ghost" style="flex:1" bindtap="markUnknown">😕 还不认识</button>
+        <button class="btn btn-primary" style="flex:1" bindtap="markKnown">✓ 认识</button>
+      </view>
+    </block>
+  </block>
+
+  <!-- 拼写测验 -->
+  <block wx:if="{{mode === 'quiz'}}">
+    <block wx:if="{{qDone}}">
+      <view class="panel panel-pad finish">
+        <view class="serif score-big">{{qResult}} / {{qTotal}}</view>
+        <view class="muted" style="margin-top:12rpx">{{qResult >= 9 ? '出色，7 分词汇功底！' : (qResult >= 6 ? '不错，把错词再过一遍。' : '回到闪卡模式多刷两轮。')}}</view>
+        <view style="display:flex;gap:16rpx;margin-top:28rpx">
+          <button class="btn btn-primary btn-sm" bindtap="quizAgain">再来一组</button>
+          <button class="btn btn-ghost btn-sm" bindtap="switchCard">返回闪卡</button>
+        </view>
+      </view>
+    </block>
+
+    <block wx:else>
+      <view class="bar-row">
+        <text class="count">第 {{qIdx + 1}} / {{qTotal}} 题 · 得分 {{qScore}}</text>
+        <view class="progress-line"><view class="fill" style="width:{{qIdx / qTotal * 100}}%"></view></view>
+      </view>
+      <view class="panel panel-pad">
+        <view class="quiz-q serif">{{qPos}} {{qCn}}</view>
+        <view class="muted small" style="margin-bottom:22rpx">{{qCat}} · 根据中文释义拼写单词
+          <button class="btn btn-ghost btn-sm" style="margin-left:12rpx" catchtap="speak" data-text="{{qWord}}">🔊 听音</button>
+        </view>
+        <input class="input {{qState}}" value="{{qInput}}" bindinput="onQuizInput" placeholder="输入英文单词" confirm-type="done" bindconfirm="submitQuiz" />
+        <view class="fb {{qState === 'good' ? 'fb-ok' : (qState === 'bad' ? 'fb-no' : '')}}">{{qFb}}</view>
+        <button class="btn btn-primary btn-sm" style="margin-top:12rpx" bindtap="submitQuiz">{{qBtnText}}</button>
+      </view>
+    </block>
+  </block>
+
+  <!-- 同义替换测验 -->
+  <block wx:if="{{mode === 'para'}}">
+    <block wx:if="{{pDone}}">
+      <view class="panel panel-pad finish">
+        <view class="serif score-big">{{pResult}} / {{pTotal}}</view>
+        <view class="muted" style="margin-top:12rpx">{{pResult >= 9 ? '出色，你已掌握雅思的底层逻辑！' : (pResult >= 6 ? '注意偷换因果与过度绝对两类陷阱。' : '正确答案永远是「换说法不换意思」。')}}</view>
+        <view style="display:flex;gap:16rpx;margin-top:28rpx">
+          <button class="btn btn-primary btn-sm" bindtap="paraAgain">再来一组</button>
+          <button class="btn btn-ghost btn-sm" bindtap="switchCard">返回闪卡</button>
+        </view>
+      </view>
+    </block>
+
+    <block wx:else>
+      <view class="bar-row">
+        <text class="count">第 {{pIdx + 1}} / {{pTotal}} 题 · 得分 {{pScore}}</text>
+        <view class="progress-line"><view class="fill" style="width:{{pIdx / pTotal * 100}}%"></view></view>
+      </view>
+      <view class="panel panel-pad">
+        <view class="muted small" style="margin-bottom:14rpx">选出与原句意思最接近的改写
+          <button class="btn btn-ghost btn-sm" style="margin-left:12rpx" catchtap="speak" data-text="{{pOrig}}">🔊 听原句</button>
+        </view>
+        <view class="para-orig serif">{{pOrig}}</view>
+        <view class="para-opt {{item.cls}}" wx:for="{{pOpts}}" wx:key="letter" data-j="{{index}}" bindtap="choosePara">
+          <text class="para-letter">{{item.letter}}.</text> {{item.t}}
+        </view>
+        <view wx:if="{{pAnswered}}" class="para-why">
+          <text class="{{pFbOk ? 'fb-ok' : 'fb-no'}}" style="font-weight:700">{{pFbOk ? '✓ 正确！' : '✗ 正确答案：' + pOpts[pAnswer].letter}}</text>
+          <view class="muted small" style="margin-top:8rpx">{{pWhy}}</view>
+        </view>
+        <button wx:if="{{pAnswered}}" class="btn btn-primary btn-sm" style="margin-top:16rpx" bindtap="nextPara">{{pBtnText}}</button>
+      </view>
+    </block>
+  </block>
+</view>

@@ -1,0 +1,73 @@
+<view class="page-pad">
+  <view class="eyebrow">WRITING</view>
+  <view class="h-title serif">计时写作训练</view>
+  <view class="h-sub">选题目 → 计时写作（自动存稿）→ 对照提纲与范文自评。</view>
+
+  <!-- 题目选择 -->
+  <scroll-view scroll-x class="prompt-scroll" enhanced show-scrollbar="{{false}}">
+    <view class="prompt-line">
+      <view wx:for="{{prompts}}" wx:key="id" class="prompt-chip {{item.on ? 'on' : ''}}" data-id="{{item.id}}" bindtap="pick">
+        <view class="tag" style="margin-bottom:8rpx">{{item.type}}</view>
+        <view style="font-weight:700;font-size:25rpx">{{item.icon}} {{item.typeCn}} · {{item.time}}min</view>
+        <view wx:if="{{item.hasDraft}}" style="color:#c0452f;font-size:21rpx;margin-top:4rpx">📌 有草稿</view>
+      </view>
+    </view>
+  </scroll-view>
+
+  <view wx:if="{{cur}}" class="panel panel-pad">
+    <view style="margin-bottom:14rpx">
+      <text class="tag tag-red">{{cur.type}}</text>
+      <text class="tag" style="margin-left:10rpx">{{cur.typeCn}}</text>
+    </view>
+    <view class="serif prompt-en">{{cur.prompt}}</view>
+    <view class="muted small" style="margin:10rpx 0 16rpx">{{cur.promptCn}}</view>
+
+    <view wx:if="{{cur.table}}" class="table-wrap">
+      <view class="muted small" style="margin-bottom:8rpx">{{cur.table.caption}}</view>
+      <view class="data-table">
+        <view class="tr tr-head">
+          <view wx:for="{{cur.table.head}}" wx:key="index" wx:for-item="h" class="th">{{h}}</view>
+        </view>
+        <view wx:for="{{cur.table.rows}}" wx:key="index" wx:for-item="row" class="tr">
+          <view wx:for="{{row}}" wx:key="index" wx:for-item="c" class="td">{{c}}</view>
+        </view>
+      </view>
+    </view>
+
+    <view class="write-toolbar">
+      <view class="timer {{danger ? 'danger' : ''}}">{{timerText}}</view>
+      <button class="btn btn-dark btn-sm" bindtap="toggleTimer">{{startText}}</button>
+      <button class="btn btn-ghost btn-sm" bindtap="resetTimer">↺</button>
+      <view class="word-count {{under ? '' : 'ok'}}">{{words}} / {{cur.minWords}} 词</view>
+    </view>
+
+    <textarea class="write-area" value="{{draft}}" bindinput="onInput"
+              placeholder="在此输入你的作文…（自动保存到本机）"
+              auto-height maxlength="-1" />
+
+    <view class="write-actions">
+      <button class="btn btn-primary btn-sm" bindtap="saveDraft">💾 保存</button>
+      <button class="btn btn-ghost btn-sm" bindtap="clearDraft">清空</button>
+      <button class="btn btn-ghost btn-sm" bindtap="toggleRef">{{showRef ? '收起提纲/范文' : '📖 提纲/范文'}}</button>
+    </view>
+
+    <view wx:if="{{showRef}}" class="ref-box">
+      <view class="ref-title serif">解题提纲</view>
+      <view wx:for="{{cur.outline}}" wx:key="index" class="outline-li">· {{item}}</view>
+
+      <block wx:if="{{cur.model}}">
+        <view class="ref-title serif" style="margin-top:24rpx">7 分参考范文</view>
+        <view class="model-text">{{cur.model}}</view>
+      </block>
+      <view wx:else class="no-model">本题提供完整提纲，请先独立完成，再用自评清单检查或找老师/AI 批改。</view>
+
+      <view class="ref-title serif" style="margin-top:24rpx">自评清单</view>
+      <view class="check-li">✓ 立场在开头与结尾一致出现</view>
+      <view class="check-li">✓ 每个主体段有明确中心句</view>
+      <view class="check-li">✓ 使用衔接词但不堆砌</view>
+      <view class="check-li">✓ 至少 2 个复杂句</view>
+      <view class="check-li">✓ 检查三单、时态、冠词、复数</view>
+      <view class="check-li">✓ 字数 ≥ {{cur.minWords}}</view>
+    </view>
+  </view>
+</view>

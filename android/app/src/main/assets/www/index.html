@@ -1,0 +1,209 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>雅思书房 · IELTS Studio</title>
+<meta name="description" content="雅思听说读写一站式练习：核心词汇闪卡、听力听写、阅读真题训练、写作计时与口语题卡。">
+<link rel="icon" href="data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 100 100'%3E%3Crect width='100' height='100' rx='18' fill='%23c0452f'/%3E%3Ctext x='50' y='72' font-size='62' text-anchor='middle' fill='%23fbf7ee' font-family='serif' font-weight='bold'%3E%E9%9B%85%3C/text%3E%3C/svg%3E">
+<link rel="stylesheet" href="css/styles.css?v=20261027">
+</head>
+<body>
+
+<header class="topbar">
+  <div class="topbar-inner">
+    <div class="brand" data-go="dashboard">
+      <span class="seal">雅</span>
+      <b>雅思书房</b>
+      <small>IELTS Studio</small>
+    </div>
+    <nav class="nav" id="nav">
+      <button data-go="dashboard" class="on">今日</button>
+      <button data-go="words">词汇</button>
+      <button data-go="listening">听力</button>
+      <button data-go="reading">阅读</button>
+      <button data-go="writing">写作</button>
+      <button data-go="speaking">口语</button>
+    </nav>
+  </div>
+</header>
+
+<!-- ============ 今日 ============ -->
+<main class="page on" id="page-dashboard">
+  <div class="bento">
+    <section class="tile hero-tile col-8">
+      <span class="hero-stamp">BAND 7+ · DAILY STUDIO</span>
+      <div>
+        <h2 class="h-serif" id="hero-greeting">今天也为 7 分努力。</h2>
+        <p>词汇、精听、真题阅读、计时写作与口语题卡——全部进度自动保存在本机浏览器。</p>
+      </div>
+      <p class="small" style="opacity:.55;position:relative;z-index:1">点击顶部导航开始今日训练 · 数据仅存于本地</p>
+    </section>
+
+    <section class="tile col-4 streak-tile">
+      <div class="flame">🔥</div>
+      <div>
+        <div class="num" id="streak-num">0</div>
+        <div class="lbl">连续学习天数（天）</div>
+        <button class="tile-link" id="streak-check" style="margin-top:10px">今日已学，打卡 →</button>
+      </div>
+    </section>
+
+    <section class="tile col-4">
+      <span class="tile-num">01 / 词汇</span>
+      <h3>核心词汇闪卡</h3>
+      <p class="tile-desc">8 大高频话题 120 个 7 分核心词，另有小学 / 四级 / 六级全量词库，翻面看例句、点喇叭听发音。</p>
+      <div class="ring-wrap">
+        <div class="ring" id="words-ring"><span id="words-ring-text">0/80</span></div>
+        <div class="meta"><b id="words-known-num">0</b><small>已标记“认识”的单词</small></div>
+      </div>
+      <button class="tile-link tile-go" data-go="words" style="margin-top:16px">开始背词 →</button>
+    </section>
+
+    <section class="tile col-4">
+      <span class="tile-num">02 / 听力</span>
+      <h3>句子精听填空</h3>
+      <p class="tile-desc">204 句挖空听写（三档语速）+ 10 组对话、10 篇学术短文：整篇播放、逐句复读、原文对照、选择题解析。</p>
+      <div class="ring-wrap">
+        <div class="ring" id="listen-ring"><span id="listen-ring-text">0/15</span></div>
+        <div class="meta"><b id="listen-done-num">0</b><small>已攻克的听写句</small></div>
+      </div>
+      <button class="tile-link tile-go" data-go="listening" style="margin-top:16px">开始精听 →</button>
+    </section>
+
+    <section class="tile col-4">
+      <span class="tile-num">03 / 阅读</span>
+      <h3>真题题型精练</h3>
+      <p class="tile-desc">三篇学术长文，T/F/NG 判断与选择题，交卷后逐题给出解析。</p>
+      <div class="ring-wrap">
+        <div class="ring" id="read-ring"><span id="read-ring-text">0/2</span></div>
+        <div class="meta"><b id="read-done-num">0</b><small>已完成的篇章</small></div>
+      </div>
+      <button class="tile-link tile-go" data-go="reading" style="margin-top:16px">开始阅读 →</button>
+    </section>
+
+    <section class="tile quote-tile col-4">
+      <div class="qmark">“</div>
+      <p id="daily-tip">写作先花 5 分钟列提纲，观点质量决定分数上限。</p>
+      <cite>DAILY EXAM TIP · 每日应考提示</cite>
+    </section>
+
+    <section class="tile col-4 plan-tile">
+      <span class="tile-num">04 / 输出</span>
+      <h3>写作 + 口语</h3>
+      <ol>
+        <li>Task 2 计时 40 分钟，实时字数统计、自动存稿</li>
+        <li>Task 1 表格题配完整 7 分范文</li>
+        <li>Part 2 题卡：60 秒准备 + 2 分钟录音回听</li>
+      </ol>
+      <div style="display:flex;gap:10px;margin-top:14px">
+        <button class="tile-link" data-go="writing">去写作 →</button>
+        <button class="tile-link" data-go="speaking">去口语 →</button>
+      </div>
+    </section>
+
+    <section class="tile col-4" id="daily-word-tile">
+      <span class="tile-num">每日一词</span>
+      <button class="tile-word" id="daily-word" style="width:100%;border:0;background:none">
+        <span class="big" id="dw-w">—</span>
+        <span class="ph" id="dw-ph">—</span>
+        <span class="cn" id="dw-cn">—</span>
+        <span class="small muted" style="margin-top:8px">点卡片翻面看例句 →</span>
+      </button>
+    </section>
+  </div>
+</main>
+
+<!-- ============ 词汇 ============ -->
+<main class="page" id="page-words">
+  <span class="eyebrow">VOCABULARY</span>
+  <h1 class="h-serif page-title">词汇闪卡</h1>
+  <p class="page-sub">五个等级全覆盖：雅思核心 120 词 + 雅思词库 / 小学 / 四级 / 六级全量词库。闪卡翻面、列表全展开逐词朗读、随身听磨耳朵，「认识」会记入掌握度，可随时切换拼写测验与同义替换。</p>
+  <div class="chips" id="level-chips" style="margin-bottom:10px"></div>
+  <div class="chips" id="word-chips"></div>
+  <div style="display:flex;gap:10px;margin-bottom:22px;flex-wrap:wrap">
+    <button class="btn btn-dark btn-sm" id="mode-card">🗂 闪卡模式</button>
+    <button class="btn btn-ghost btn-sm" id="mode-list">📜 列表模式</button>
+    <button class="btn btn-ghost btn-sm" id="mode-radio">🎧 随身听</button>
+    <button class="btn btn-ghost btn-sm" id="mode-quiz">⌨ 拼写测验（10 题）</button>
+    <button class="btn btn-ghost btn-sm" id="mode-para">🔁 同义替换（10 题）</button>
+  </div>
+
+  <div id="word-card-stage" class="stage"></div>
+  <div id="word-list-stage" class="stage" style="display:none"></div>
+  <div id="word-radio-stage" class="stage" style="display:none"></div>
+  <div id="word-quiz-stage" class="stage" style="display:none"></div>
+  <div id="word-para-stage" class="stage" style="display:none"></div>
+</main>
+
+<!-- ============ 听力 ============ -->
+<main class="page" id="page-listening">
+  <span class="eyebrow">LISTENING</span>
+  <h1 class="h-serif page-title">句子精听填空</h1>
+  <p class="page-sub">句子听写：手写句 24 句 + 雅思例句库 180 句，挖空填词每句限播 5 次；篇章听力：10 组生活场景对话（双人分角色朗读）+ 10 篇学术短文讲座，整篇播放、逐句复读、原文对照、选择题解析。</p>
+  <div class="chips" id="listen-tabs" style="margin-bottom:10px">
+    <button class="chip on" data-ltab="dict">✍️ 句子听写（204 句）</button>
+    <button class="chip" data-ltab="dialogue">💬 对话篇章（10 组）</button>
+    <button class="chip" data-ltab="lecture">🎓 短文讲座（10 篇）</button>
+  </div>
+  <div class="chips" id="listen-chips">
+    <button class="chip on" data-level="0">全部</button>
+    <button class="chip" data-level="1">★ 基础（Section 1-2）</button>
+    <button class="chip" data-level="2">★★ 进阶（Section 3）</button>
+    <button class="chip" data-level="3">★★★ 冲刺（Section 4）</button>
+  </div>
+  <div class="stage" id="listen-stage"></div>
+  <div class="stage" id="listen-part-stage" style="display:none"></div>
+</main>
+
+<!-- ============ 阅读 ============ -->
+<main class="page" id="page-reading">
+  <span class="eyebrow">READING</span>
+  <h1 class="h-serif page-title">真题题型精练</h1>
+  <p class="page-sub">True / False / Not Given 是中国考生最易错的题型：只有出现明确相反信息才选 False，没提到一律 Not Given。</p>
+  <div id="reading-list"></div>
+  <div id="reading-practice" style="display:none"></div>
+</main>
+
+<!-- ============ 写作 ============ -->
+<main class="page" id="page-writing">
+  <span class="eyebrow">WRITING</span>
+  <h1 class="h-serif page-title">计时写作训练</h1>
+  <p class="page-sub">选题目 → 计时写作（草稿自动保存）→ 对照提纲与 7 分范文自评。Task 2 须不少于 250 词，Task 1 不少于 150 词。</p>
+  <div class="write-grid">
+    <aside class="panel" id="writing-list"></aside>
+    <section id="writing-work"></section>
+  </div>
+</main>
+
+<!-- ============ 口语 ============ -->
+<main class="page" id="page-speaking">
+  <span class="eyebrow">SPEAKING</span>
+  <h1 class="h-serif page-title">口语题卡训练</h1>
+  <p class="page-sub">Part 1 熟悉套路，Part 2 严格计时并录音回听，Part 3 用要点卡构建有层次的答案。建议戴上耳机练习。</p>
+
+  <div class="part-block">
+    <div class="part-label"><span class="bar">P2</span><h3>Part 2 个人长独白 · Cue Cards</h3></div>
+    <div class="speak-grid" id="cue-grid"></div>
+  </div>
+
+  <div class="part-block">
+    <div class="part-label"><span class="bar">P1</span><h3>Part 1 日常问答（点击看范例）</h3></div>
+    <div class="panel panel-pad" id="part1-list"></div>
+  </div>
+
+  <div class="part-block">
+    <div class="part-label"><span class="bar">P3</span><h3>Part 3 抽象讨论 · 答题要点</h3></div>
+    <div class="panel panel-pad" id="part3-list"></div>
+  </div>
+</main>
+
+<div class="toast" id="toast"></div>
+
+<script src="js/vocab-levels.js?v=20261027"></script>
+<script src="js/listening-bank.js?v=20261027"></script>
+<script src="js/data.js?v=20261027"></script>
+<script src="android-tts.js"></script>
+<script src="js/app.js?v=20261027"></script>
+</body>
+</html>

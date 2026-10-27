@@ -1,0 +1,4 @@
+{
+  "desc": "雅思书房小程序 sitemap",
+  "rules": [{ "action": "allow", "page": "*" }]
+}

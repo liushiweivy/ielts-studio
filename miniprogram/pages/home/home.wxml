@@ -1,0 +1,76 @@
+<view class="page-pad">
+  <!-- Hero -->
+  <view class="hero">
+    <view class="hero-stamp">BAND 7+ · DAILY STUDIO</view>
+    <view class="hero-title serif">今天也为 7 分努力。</view>
+    <view class="hero-sub">听说读写一站式训练，进度只保存在本机。</view>
+    <view class="hero-watermark serif">雅</view>
+  </view>
+
+  <!-- 打卡 -->
+  <view class="streak panel-pad panel" bindtap="tapCheckIn">
+    <view class="flame">🔥</view>
+    <view style="flex:1">
+      <view class="streak-num serif">{{streak}}</view>
+      <view class="muted small">连续学习天数 · 点击打卡</view>
+    </view>
+    <view class="tag {{checkedToday ? 'tag-green' : 'tag-red'}}">{{checkedToday ? '今日已打卡' : '打卡'}}</view>
+  </view>
+
+  <!-- 模块入口 -->
+  <view class="grid">
+    <view class="mod panel-pad panel" data-url="/pages/words/words" bindtap="goTab">
+      <view class="mod-no muted small">01</view>
+      <view class="mod-title serif">词汇闪卡</view>
+      <view class="mod-desc muted small">{{wordsTotal}} 核心词 · 翻面 · 拼写测验</view>
+      <view class="ring" style="background:conic-gradient(#2f6049 {{wordsPct}}%,#efe7d5 0)"><view class="ring-inner"><text>{{knownCount}}/{{wordsTotal}}</text></view></view>
+    </view>
+
+    <view class="mod panel-pad panel" data-url="/pages/listening/listening" bindtap="goTab">
+      <view class="mod-no muted small">02</view>
+      <view class="mod-title serif">精听填空</view>
+      <view class="mod-desc muted small">{{listenTotal}} 句 · 三档难度</view>
+      <view class="ring ring-green" style="background:conic-gradient(#2f6049 {{listenPct}}%,#efe7d5 0)"><view class="ring-inner"><text>{{listenCount}}/{{listenTotal}}</text></view></view>
+    </view>
+
+    <view class="mod panel-pad panel" data-url="/pages/reading/reading" bindtap="goTab">
+      <view class="mod-no muted small">03</view>
+      <view class="mod-title serif">真题阅读</view>
+      <view class="mod-desc muted small">{{readTotal}} 篇 · T/F/NG + 选择</view>
+      <view class="ring ring-gold" style="background:conic-gradient(#b8893b {{readPct}}%,#efe7d5 0)"><view class="ring-inner"><text>{{readCount}}/{{readTotal}}</text></view></view>
+    </view>
+
+    <view class="mod panel-pad panel" data-url="/pages/writing/writing" bindtap="goTab">
+      <view class="mod-no muted small">04</view>
+      <view class="mod-title serif">计时写作</view>
+      <view class="mod-desc muted small">5 题 · 自动存稿 · 范文</view>
+      <view class="mod-emoji">📝</view>
+    </view>
+  </view>
+
+  <!-- 口语入口 -->
+  <view class="speak-entry panel-pad panel" bindtap="goSpeaking">
+    <view>
+      <view class="serif" style="font-size:34rpx">口语题卡训练</view>
+      <view class="muted small" style="margin-top:6rpx">Part 1/2/3 · 60 秒准备 + 2 分钟录音回听</view>
+    </view>
+    <view class="entry-go">→</view>
+  </view>
+
+  <!-- 每日一词 -->
+  <view class="daily panel-pad panel" data-url="/pages/words/words" bindtap="goTab">
+    <view class="muted small" style="margin-bottom:6rpx">每日一词</view>
+    <block wx:if="{{dailyWord}}">
+      <view class="serif" style="font-size:46rpx">{{dailyWord.w}}</view>
+      <view style="color:#c0452f;font-size:24rpx">{{dailyWord.ph}} <text class="muted">{{dailyWord.pos}}</text></view>
+      <view class="muted small" style="margin-top:6rpx">{{dailyWord.cn}}</view>
+    </block>
+  </view>
+
+  <!-- 每日提示 -->
+  <view class="tip-box">
+    <view class="tip-q">“</view>
+    <view>{{tip}}</view>
+    <view class="muted small" style="margin-top:10rpx">DAILY EXAM TIP · 每日应考提示</view>
+  </view>
+</view>

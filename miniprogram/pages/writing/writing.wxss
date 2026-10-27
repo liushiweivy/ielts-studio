@@ -1,0 +1,42 @@
+.prompt-scroll { width: 100%; white-space: nowrap; margin: 0 -28rpx 24rpx; padding: 0 28rpx; }
+.prompt-line { display: inline-flex; gap: 14rpx; }
+.prompt-chip {
+  display: inline-block; width: 280rpx; white-space: normal; vertical-align: top;
+  border: 2rpx solid #ddd2bb; border-radius: 16rpx; padding: 18rpx 20rpx;
+  background: #fbf7ee; font-size: 23rpx; color: #5b5144; line-height: 1.5;
+}
+.prompt-chip.on { background: #211c15; border-color: #211c15; color: #f5efe2; }
+.prompt-chip.on .tag { background: rgba(245,239,226,.14); color: #e8a092; border-color: rgba(245,239,226,.25); }
+
+.prompt-en { font-size: 29rpx; line-height: 1.75; }
+
+.table-wrap { margin: 10rpx 0 18rpx; }
+.data-table { border: 1rpx solid #ddd2bb; border-radius: 10rpx; overflow: hidden; }
+.tr { display: flex; }
+.th, .td { flex: 1; padding: 14rpx 10rpx; font-size: 24rpx; border-bottom: 1rpx solid #ddd2bb; text-align: center; }
+.tr:last-child .th, .tr:last-child .td { border-bottom: none; }
+.tr-head { background: #efe7d5; }
+.th { font-weight: 800; }
+
+.write-toolbar { display: flex; align-items: center; gap: 14rpx; margin: 20rpx 0 16rpx; flex-wrap: wrap; }
+.timer {
+  font-size: 40rpx; font-weight: 800; letter-spacing: 3rpx;
+  background: #efe7d5; border-radius: 12rpx; padding: 4rpx 22rpx;
+}
+.timer.danger { color: #c0452f; }
+.word-count { font-size: 24rpx; color: #c0452f; font-weight: 700; margin-left: auto; }
+.word-count.ok { color: #2f6049; }
+
+.write-area {
+  width: 100%; box-sizing: border-box; min-height: 480rpx;
+  border: 2rpx solid #ddd2bb; border-radius: 16rpx; background: #fffdf8;
+  padding: 22rpx; font-size: 28rpx; line-height: 1.9;
+}
+.write-actions { display: flex; gap: 14rpx; margin-top: 18rpx; flex-wrap: wrap; }
+
+.ref-box { margin-top: 26rpx; padding-top: 22rpx; border-top: 2rpx dashed #ddd2bb; }
+.ref-title { font-size: 30rpx; margin-bottom: 10rpx; }
+.outline-li { font-size: 25rpx; color: #5b5144; margin: 8rpx 0; line-height: 1.6; }
+.model-text { white-space: pre-line; font-size: 25rpx; color: #5b5144; line-height: 1.95; }
+.no-model { background: #efe7d5; border-radius: 12rpx; padding: 18rpx 22rpx; font-size: 24rpx; color: #5b5144; margin-top: 12rpx; }
+.check-li { font-size: 24rpx; color: #2f6049; margin: 8rpx 0; }

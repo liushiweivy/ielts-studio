@@ -1,0 +1,9 @@
+.listen-controls { display: flex; align-items: center; gap: 20rpx; margin-bottom: 26rpx; }
+.sentence { font-size: 37rpx; line-height: 2.1; margin-bottom: 28rpx; }
+.blank {
+  display: inline-block; min-width: 180rpx; text-align: center;
+  border-bottom: 4rpx solid #c0452f; color: #c0452f; font-weight: 700;
+}
+.blank-ok { border-color: #2f6049; color: #2f6049; }
+.blank-no { border-color: #c0452f; color: #c0452f; }
+.listen-actions { display: flex; gap: 16rpx; margin-top: 22rpx; flex-wrap: wrap; }

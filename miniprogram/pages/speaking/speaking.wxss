@@ -1,0 +1,49 @@
+.part-label { display: flex; align-items: center; gap: 16rpx; margin-bottom: 20rpx; }
+.bar {
+  width: 70rpx; height: 44rpx; background: #211c15; color: #f5efe2;
+  border-radius: 10rpx; display: flex; align-items: center; justify-content: center;
+  font-size: 22rpx; font-weight: 800;
+}
+.part-h { font-size: 34rpx; }
+
+.cue-card {
+  position: relative; background: #fbf7ee; border: 1rpx solid #ddd2bb;
+  border-radius: 22rpx; padding: 38rpx 30rpx 30rpx; margin-bottom: 26rpx;
+  box-shadow: 0 2rpx 0 rgba(33,28,21,.05), 0 16rpx 40rpx -24rpx rgba(33,28,21,.35);
+}
+.cue-badge {
+  position: absolute; top: -16rpx; left: 28rpx;
+  background: #c0452f; color: #fff6ee; font-size: 20rpx; font-weight: 800;
+  letter-spacing: 3rpx; padding: 5rpx 16rpx; border-radius: 8rpx; transform: rotate(-1.5deg);
+}
+.cue-title { font-size: 32rpx; margin: 6rpx 0 14rpx; line-height: 1.5; }
+.cue-bullet { color: #5b5144; font-size: 26rpx; margin: 6rpx 0; line-height: 1.6; }
+
+.cue-timer { text-align: center; padding: 24rpx 0 8rpx; }
+.phase { font-size: 23rpx; letter-spacing: 3rpx; color: #8d8170; margin-bottom: 8rpx; }
+.clock { font-size: 86rpx; font-weight: 900; line-height: 1.1; }
+.clock.prep { color: #b8893b; }
+.clock.speak { color: #c0452f; }
+.rec { color: #c0452f; font-size: 24rpx; }
+.dot {
+  display: inline-block; width: 14rpx; height: 14rpx; border-radius: 50%;
+  background: #c0452f; margin-right: 8rpx;
+  animation: blink 1.2s infinite;
+}
+@keyframes blink { 50% { opacity: .25; } }
+
+.cue-btns { display: flex; gap: 14rpx; justify-content: center; flex-wrap: wrap; margin-top: 12rpx; }
+.playback { text-align: center; margin-top: 16rpx; }
+.model-toggle { margin-top: 18rpx; font-size: 24rpx; color: #8d8170; }
+.model-text { white-space: pre-line; font-size: 25rpx; color: #5b5144; margin-top: 12rpx; line-height: 1.9; }
+
+.p1-topic { font-size: 30rpx; margin: 20rpx 0 8rpx; }
+.faq { border-bottom: 1rpx solid #ddd2bb; padding: 6rpx 0; }
+.faq:last-child { border-bottom: none; }
+.faq-q {
+  display: flex; justify-content: space-between; gap: 16rpx;
+  padding: 18rpx 4rpx; font-weight: 700; font-size: 27rpx; line-height: 1.6;
+}
+.faq-sign { color: #c0452f; font-size: 36rpx; line-height: 1.2; flex: none; }
+.faq-a { padding: 0 4rpx 20rpx; font-size: 25rpx; color: #5b5144; line-height: 1.8; }
+.tip3 { background: #efe7d5; border-radius: 14rpx; padding: 18rpx 22rpx; font-size: 25rpx; margin-bottom: 16rpx; }

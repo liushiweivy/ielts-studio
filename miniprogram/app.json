@@ -1,0 +1,32 @@
+{
+  "pages": [
+    "pages/home/home",
+    "pages/words/words",
+    "pages/listening/listening",
+    "pages/reading/reading",
+    "pages/writing/writing",
+    "pages/speaking/speaking"
+  ],
+  "window": {
+    "navigationBarTitleText": "雅思书房",
+    "navigationBarBackgroundColor": "#211c15",
+    "navigationBarTextStyle": "white",
+    "backgroundColor": "#f5efe2",
+    "backgroundTextStyle": "dark"
+  },
+  "tabBar": {
+    "color": "#8d8170",
+    "selectedColor": "#c0452f",
+    "backgroundColor": "#fbf7ee",
+    "borderStyle": "black",
+    "list": [
+      { "pagePath": "pages/home/home", "text": "今日" },
+      { "pagePath": "pages/words/words", "text": "词汇" },
+      { "pagePath": "pages/listening/listening", "text": "听力" },
+      { "pagePath": "pages/reading/reading", "text": "阅读" },
+      { "pagePath": "pages/writing/writing", "text": "写作" }
+    ]
+  },
+  "sitemapLocation": "sitemap.json",
+  "style": "v2"
+}

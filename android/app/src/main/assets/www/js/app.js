@@ -1,0 +1,1163 @@
+/* 雅思书房 · 前端逻辑（零依赖，原生 JS） */
+(function () {
+  'use strict';
+  var D = window.IELTS_DATA;
+
+  /* ---------------- 本地进度 ---------------- */
+  var KEY = 'ielts-studio-v1';
+  function loadStore() {
+    try { return JSON.parse(localStorage.getItem(KEY)) || {}; }
+    catch (e) { return {}; }
+  }
+  function saveStore(patch) {
+    try {
+      var s = loadStore();
+      Object.keys(patch).forEach(function (k) { s[k] = patch[k]; });
+      localStorage.setItem(KEY, JSON.stringify(s));
+    } catch (e) {
+      toast('本地存储不可用，进度未能保存');
+    }
+  }
+  // 本地时区日期（与小程序端一致），避免 UTC 在凌晨 0-8 点算成前一天
+  function today() {
+    var d = new Date();
+    function p2(n) { return String(n).padStart(2, '0'); }
+    return d.getFullYear() + '-' + p2(d.getMonth() + 1) + '-' + p2(d.getDate());
+  }
+  function dayNum(d) { return Math.floor(new Date(d + 'T00:00:00').getTime() / 864e5); }
+  // 打卡 + streak
+  function checkIn() {
+    var s = loadStore(), t = today();
+    if (s.lastDay === t) return s.streak || 1;
+    s.streak = s.lastDay && dayNum(t) - dayNum(s.lastDay) === 1 ? (s.streak || 0) + 1 : 1;
+    s.lastDay = t;
+    try { localStorage.setItem(KEY, JSON.stringify(s)); } catch (e) {}
+    return s.streak;
+  }
+
+  function toast(msg) {
+    var el = document.getElementById('toast');
+    el.textContent = msg;
+    el.classList.add('show');
+    clearTimeout(el._t);
+    el._t = setTimeout(function () { el.classList.remove('show'); }, 2200);
+  }
+  function esc(s) {
+    return String(s).replace(/[&<>"']/g, function (c) {
+      return { '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;', "'": '&#39;' }[c];
+    });
+  }
+
+  /* ---------------- 英语朗读 TTS ---------------- */
+  var voices = [];
+  function refreshVoices() { voices = speechSynthesis.getVoices(); }
+  if ('speechSynthesis' in window) {
+    refreshVoices();
+    speechSynthesis.onvoiceschanged = refreshVoices;
+  }
+  function speak(text, rate) {
+    if (!('speechSynthesis' in window)) { toast('当前浏览器不支持语音朗读'); return; }
+    speechSynthesis.cancel();
+    speechSynthesis.speak(makeUtter(text, 'en', rate));
+  }
+  // 生成一条 utterance（随身听模式要自己串联 onend，不走 cancel 版 speak）
+  function makeUtter(text, lang, rate) {
+    var u = new SpeechSynthesisUtterance(text);
+    u.lang = lang === 'zh' ? 'zh-CN' : 'en-GB';
+    u.rate = rate || 1;
+    var v = voices.filter(function (x) {
+        return lang === 'zh' ? /^zh/i.test(x.lang) : /en[-_]GB/i.test(x.lang);
+      })[0] ||
+      voices.filter(function (x) { return lang === 'zh' ? /zh|cmn/i.test(x.lang) : /^en/i.test(x.lang); })[0];
+    if (v) u.voice = v;
+    return u;
+  }
+
+  /* ---------------- 路由 ---------------- */
+  function go(name) {
+    document.querySelectorAll('.page').forEach(function (p) { p.classList.remove('on'); });
+    document.getElementById('page-' + name).classList.add('on');
+    document.querySelectorAll('#nav button').forEach(function (b) {
+      b.classList.toggle('on', b.dataset.go === name);
+    });
+    window.scrollTo(0, 0);
+    history.replaceState(null, '', '#' + name);
+    checkIn();
+    if (name === 'dashboard') renderDashboard();
+  }
+  document.addEventListener('click', function (e) {
+    var t = e.target.closest('[data-go]');
+    if (t) go(t.dataset.go);
+  });
+
+  /* ---------------- 今日 ---------------- */
+  function masteredCount() { var s = loadStore(); return Object.keys(s.known || {}).length; }
+  function listenDone() { var s = loadStore(); return (s.listenOk || []).length; }
+  function readDone() { var s = loadStore(); return (s.readDone || []).length; }
+  function ring(el, pct) { el.style.setProperty('--p', pct + '%'); }
+
+  function renderDashboard() {
+    var s = loadStore();
+    document.getElementById('streak-num').textContent = s.streak || 0;
+    var mk = masteredCount();
+    document.getElementById('words-known-num').textContent = mk;
+    document.getElementById('words-ring-text').textContent = mk + '/' + D.WORDS.length;
+    ring(document.getElementById('words-ring'), Math.round(mk / D.WORDS.length * 100));
+    var ld = listenDone();
+    var listenTotal = allListening().length;
+    document.getElementById('listen-done-num').textContent = ld;
+    document.getElementById('listen-ring-text').textContent = ld + '/' + listenTotal;
+    ring(document.getElementById('listen-ring'), Math.round(ld / listenTotal * 100));
+    var rd = readDone();
+    document.getElementById('read-done-num').textContent = rd;
+    document.getElementById('read-ring-text').textContent = rd + '/' + D.READING.length;
+    ring(document.getElementById('read-ring'), Math.round(rd / D.READING.length * 100));
+    document.getElementById('daily-tip').textContent = D.TIPS[dayNum(today()) % D.TIPS.length];
+    var w = D.WORDS[dayNum(today()) % D.WORDS.length];
+    document.getElementById('dw-w').textContent = w.w;
+    document.getElementById('dw-ph').textContent = w.ph;
+    document.getElementById('dw-cn').textContent = w.pos + ' ' + w.cn;
+    document.getElementById('daily-word').onclick = function () {
+      go('words'); startCard(w.cat, w.w);
+    };
+  }
+  document.getElementById('streak-check').onclick = function () {
+    var n = checkIn();
+    toast('已打卡，连续学习 ' + n + ' 天 🔥');
+    renderDashboard();
+  };
+
+  /* ---------------- 词汇闪卡（雅思核心 + 分级词库） ---------------- */
+  var VOCAB = window.IELTS_VOCAB || { LEVELS: [], WORDS: {} };
+  // 雅思例句听写库（生成产物 js/listening-bank.js）：紧凑数组转对象，并入手写句
+  var LISTEN_BANK = (window.IELTS_LISTEN_BANK || []).map(function (e) {
+    return { level: e[0], sentence: e[1], answer: e[2], cn: e[3] };
+  });
+  function allListening() { return D.LISTENING.concat(LISTEN_BANK); }
+  var cardState = { level: 'ielts', cat: 'all', idx: 0, list: D.WORDS.slice(), flipped: false };
+  // 分级词库条目是紧凑数组 [w,ph,pos,cn,ex?,exCn?]，统一映射成与雅思词相同的对象
+  function levelList(level) {
+    return (VOCAB.WORDS[level] || []).map(function (e) {
+      return { w: e[0], ph: e[1], pos: e[2], cn: e[3], ex: e[4] || '', exCn: e[5] || '', cat: level };
+    });
+  }
+  function levelName(id) {
+    if (id === 'ielts') return '雅思核心';
+    var l = VOCAB.LEVELS.find(function (x) { return x.id === id; });
+    return l ? l.name : id;
+  }
+  function renderLevelChips() {
+    var html = '<button class="chip ' + (cardState.level === 'ielts' ? 'on' : '') + '" data-level="ielts">雅思核心 ' + D.WORDS.length + '</button>';
+    VOCAB.LEVELS.forEach(function (l) {
+      html += '<button class="chip ' + (cardState.level === l.id ? 'on' : '') + '" data-level="' + l.id + '">' +
+        l.name + ' ' + (VOCAB.WORDS[l.id] || []).length + '</button>';
+    });
+    document.getElementById('level-chips').innerHTML = html;
+  }
+  document.getElementById('level-chips').addEventListener('click', function (e) {
+    var b = e.target.closest('.chip'); if (!b) return;
+    if (b.dataset.level !== cardState.level) { cardState.level = b.dataset.level; cardState.cat = 'all'; }
+    enterMode(currentMode); // 切等级后停留在当前模式（闪卡/列表/随身听各自刷新）
+  });
+  function wordChips(onCat) {
+    if (cardState.level !== 'ielts') return ''; // 分级词库不按话题分类
+    var html = '<button class="chip ' + (onCat === 'all' ? 'on' : '') + '" data-cat="all">全部 ' + D.WORDS.length + '</button>';
+    D.WORD_CATS.forEach(function (c) {
+      html += '<button class="chip ' + (onCat === c.id ? 'on' : '') + '" data-cat="' + c.id + '">' + c.name + '</button>';
+    });
+    return html;
+  }
+  function renderWordChips() {
+    document.getElementById('word-chips').innerHTML = wordChips(cardState.cat);
+  }
+  document.getElementById('word-chips').addEventListener('click', function (e) {
+    var b = e.target.closest('.chip'); if (!b) return;
+    cardState.cat = b.dataset.cat;
+    enterMode(currentMode);
+  });
+
+  function startCard(cat, jumpWord) {
+    setMode('card'); // 从话题 chip / 每日一词进入时退出测验模式
+    cardState.cat = cat;
+    if (cardState.level === 'ielts') {
+      cardState.list = cat === 'all' ? D.WORDS.slice() : D.WORDS.filter(function (w) { return w.cat === cat; });
+    } else {
+      cardState.list = shuffle(levelList(cardState.level)); // 大词库乱序进入，避免永远从 a 开始
+    }
+    cardState.idx = 0;
+    if (jumpWord) {
+      var i = cardState.list.findIndex(function (w) { return w.w === jumpWord; });
+      if (i >= 0) cardState.idx = i;
+    }
+    cardState.flipped = false;
+    renderLevelChips();
+    renderWordChips();
+    renderCard();
+  }
+  function renderCard() {
+    var w = cardState.list[cardState.idx], total = cardState.list.length;
+    var s = loadStore(), isKnown = (s.known || {})[w.w];
+    var stage = document.getElementById('word-card-stage');
+    stage.innerHTML =
+      '<div class="study-bar"><span class="study-count">' + (cardState.idx + 1) + ' / ' + total + '</span>' +
+      '<div class="progress-line"><i style="width:' + ((cardState.idx + 1) / total * 100) + '%"></i></div>' +
+      '<span class="tag ' + (isKnown ? 'tag-green' : '') + '">' + (isKnown ? '已掌握' : '未掌握') + '</span></div>' +
+      '<div class="flashcard" id="flashcard">' +
+        '<div class="flash-inner">' +
+          '<div class="flash-face flash-front">' +
+            '<div class="flash-top"><span class="tag">' + catName(w.cat) + '</span><button class="speak-btn" data-speak="' + esc(w.w) + '" title="朗读">🔊</button></div>' +
+            '<div class="flash-word">' + w.w + '</div>' +
+            '<div class="flash-ph">' + w.ph + ' <span class="flash-pos">' + w.pos + '</span></div>' +
+            '<div class="flash-hint">点击卡片翻面看释义</div>' +
+          '</div>' +
+          '<div class="flash-face flash-back">' +
+            '<div class="flash-top"><span class="tag tag-red">' + catName(w.cat) + '</span>' +
+            (w.ex ? '<button class="speak-btn" data-speak="' + esc(w.ex) + '" title="朗读例句">🔊</button>' : '') + '</div>' +
+            '<div class="flash-cn">' + w.cn + '</div>' +
+            (w.ex ? '<div class="flash-ex">' + esc(w.ex) + '</div><div class="flash-excn">' + esc(w.exCn) + '</div>' : '') +
+            '<div class="flash-hint" style="margin-top:auto">再点一次翻回正面</div>' +
+          '</div>' +
+        '</div>' +
+      '</div>' +
+      '<div class="card-actions">' +
+        '<button class="btn btn-ghost" id="btn-unknown">😕 还不认识</button>' +
+        '<button class="btn btn-primary" id="btn-known">✓ 认识</button>' +
+      '</div>';
+    var fc = document.getElementById('flashcard');
+    fc.onclick = function (e) {
+      if (e.target.closest('.speak-btn')) return;
+      cardState.flipped = !cardState.flipped;
+      fc.classList.toggle('flipped', cardState.flipped);
+    };
+    document.getElementById('btn-known').onclick = function () {
+      var st = loadStore(); st.known = st.known || {}; st.known[w.w] = true; saveStore({ known: st.known });
+      nextCard();
+    };
+    document.getElementById('btn-unknown').onclick = function () {
+      var st = loadStore(); st.known = st.known || {}; delete st.known[w.w]; saveStore({ known: st.known });
+      nextCard();
+    };
+    stage.querySelectorAll('[data-speak]').forEach(function (b) {
+      b.onclick = function (e) { e.stopPropagation(); speak(b.dataset.speak); };
+    });
+  }
+  function nextCard() {
+    if (cardState.idx < cardState.list.length - 1) { cardState.idx++; cardState.flipped = false; renderCard(); }
+    else {
+      document.getElementById('word-card-stage').innerHTML =
+        '<div class="panel panel-pad score-hero"><div class="big">🎉</div><p>本组卡片过完了！去拼写测验检验一下，或换个话题继续。</p>' +
+        '<div style="margin-top:18px;display:flex;gap:10px;justify-content:center"><button class="btn btn-primary" id="to-quiz">开始拼写测验</button>' +
+        '<button class="btn btn-ghost" id="replay">再过一遍</button></div></div>';
+      document.getElementById('to-quiz').onclick = function () { setMode('quiz'); startQuiz(); };
+      document.getElementById('replay').onclick = function () { startCard(cardState.cat); };
+    }
+  }
+  function catName(id) {
+    var c = D.WORD_CATS.find(function (x) { return x.id === id; });
+    return c ? c.name : levelName(id); // 分级词库的 cat 即等级 id
+  }
+
+  /* ---------- 列表模式：全量展开 + 逐词朗读 ---------- */
+  var listState = { kw: '', shown: 0, pool: [] };
+  var LIST_CHUNK = 200;
+  function currentWordPool() {
+    if (cardState.level === 'ielts') {
+      return cardState.cat === 'all' ? D.WORDS.slice() : D.WORDS.filter(function (w) { return w.cat === cardState.cat; });
+    }
+    return levelList(cardState.level); // 生成文件按字母序，列表模式不乱序
+  }
+  function startList() {
+    renderLevelChips(); renderWordChips();
+    listState.pool = currentWordPool();
+    listState.kw = '';
+    listState.shown = 0;
+    var stage = document.getElementById('word-list-stage');
+    stage.innerHTML =
+      '<div class="listen-controls">' +
+        '<input class="input" id="list-filter" placeholder="筛选：英文或中文关键词" autocomplete="off" style="max-width:280px">' +
+        '<span class="muted small" id="list-count"></span>' +
+      '</div>' +
+      '<div id="list-rows"></div>' +
+      '<div style="margin:14px 0;text-align:center"><button class="btn btn-ghost btn-sm" id="list-more" style="display:none">加载更多</button></div>';
+    document.getElementById('list-filter').addEventListener('input', function (e) {
+      listState.kw = e.target.value.trim().toLowerCase();
+      listState.shown = 0;
+      document.getElementById('list-rows').innerHTML = '';
+      renderListRows();
+    });
+    document.getElementById('list-more').onclick = renderListRows;
+    renderListRows();
+  }
+  function listFiltered() {
+    var kw = listState.kw;
+    if (!kw) return listState.pool;
+    return listState.pool.filter(function (w) {
+      return w.w.toLowerCase().indexOf(kw) >= 0 || String(w.cn || '').toLowerCase().indexOf(kw) >= 0;
+    });
+  }
+  function renderListRows() {
+    var rows = listFiltered();
+    var box = document.getElementById('list-rows');
+    var known = loadStore().known || {};
+    var slice = rows.slice(listState.shown, listState.shown + LIST_CHUNK);
+    var html = slice.map(function (w) {
+      return '<div class="word-row">' +
+        '<button class="speak-btn" data-speak="' + esc(w.w) + '" title="朗读单词">🔊</button>' +
+        '<span class="wr-w">' + esc(w.w) + '</span>' +
+        '<span class="wr-ph">' + esc(w.ph || '') + '</span>' +
+        '<span class="wr-pos">' + esc(w.pos || '') + '</span>' +
+        '<span class="wr-cn">' + esc(w.cn || '') + '</span>' +
+        (known[w.w] ? '<span class="tag tag-green">已掌握</span>' : '') +
+      '</div>' +
+      (w.ex ? '<div class="word-row word-row-ex">' +
+        '<button class="speak-btn" data-speak="' + esc(w.ex) + '" title="朗读例句">🔊</button>' +
+        '<span class="wr-ex">' + esc(w.ex) + '</span>' +
+        '<span class="wr-excn">' + esc(w.exCn || '') + '</span>' +
+      '</div>' : '');
+    }).join('');
+    box.insertAdjacentHTML('beforeend', html);
+    listState.shown += slice.length;
+    document.getElementById('list-count').textContent = '共 ' + rows.length + ' 词 · 已展开 ' + Math.min(listState.shown, rows.length);
+    var more = document.getElementById('list-more');
+    more.style.display = listState.shown < rows.length ? '' : 'none';
+    more.textContent = '加载更多（还剩 ' + (rows.length - listState.shown) + '）';
+    box.querySelectorAll('[data-speak]').forEach(function (b) {
+      b.onclick = function () { speak(b.dataset.speak); };
+    });
+  }
+
+  /* ---------- 随身听：边工作边听，单词→中文释义→例句 连续播报 ---------- */
+  var radio = { list: [], idx: 0, playing: false, gen: 0, watchdog: null };
+  function startRadio() {
+    renderLevelChips(); renderWordChips();
+    radio.list = currentWordPool();
+    radio.idx = 0;
+    radio.playing = false;
+    renderRadio();
+  }
+  function renderRadio() {
+    var stage = document.getElementById('word-radio-stage');
+    var w = radio.list[radio.idx] || null;
+    stage.innerHTML =
+      '<div class="panel panel-pad">' +
+        '<div class="quiz-hint">连续播报「' + levelName(cardState.level) + '」的 ' + radio.list.length + ' 个单词：先读单词，再读中文释义和例句，自动循环。想听简单的，上面切「小学」或「四级」。</div>' +
+        (w ? '<div class="radio-now">' +
+          '<span class="wr-w">' + esc(w.w) + '</span>' +
+          '<span class="wr-ph">' + esc(w.ph || '') + '</span>' +
+          '<span class="wr-pos">' + esc(w.pos || '') + '</span>' +
+          '<span class="wr-cn">' + esc(w.cn || '') + '</span></div>' +
+          (w.ex ? '<div class="muted small" style="margin-top:6px">' + esc(w.ex) + '<br>' + esc(w.exCn || '') + '</div>' : '') : '') +
+        '<div class="listen-controls">' +
+          '<button class="btn btn-primary btn-sm" id="radio-toggle">' + (radio.playing ? '⏸ 暂停' : '▶ 开始') + '</button>' +
+          '<button class="btn btn-ghost btn-sm" id="radio-prev">上一个</button>' +
+          '<button class="btn btn-ghost btn-sm" id="radio-next">下一个</button>' +
+          '<button class="btn btn-ghost btn-sm" id="radio-shuffle">🔀 乱序重排</button>' +
+        '</div>' +
+        '<div class="listen-controls">' +
+          '<label class="small muted"><input type="checkbox" id="radio-cn" checked> 读中文释义</label>' +
+          '<label class="small muted"><input type="checkbox" id="radio-ex" checked> 读例句</label>' +
+          '<label class="small muted">语速 <select id="radio-rate">' +
+            '<option value="0.8">慢</option><option value="1" selected>常速</option><option value="1.25">快</option>' +
+          '</select></label>' +
+          '<span class="muted small">' + (radio.list.length ? (radio.idx + 1) + ' / ' + radio.list.length : '0 / 0') + '</span>' +
+        '</div>' +
+      '</div>';
+    document.getElementById('radio-toggle').onclick = function () { radio.playing ? pauseRadio() : playRadio(); };
+    document.getElementById('radio-prev').onclick = function () { stepRadio(-1); };
+    document.getElementById('radio-next').onclick = function () { stepRadio(1); };
+    document.getElementById('radio-shuffle').onclick = function () {
+      radio.list = shuffle(radio.list); radio.idx = 0;
+      if (radio.playing) { speechSynthesis.cancel(); playCurrent(); } else renderRadio();
+    };
+  }
+  function radioOpts() {
+    return {
+      cn: document.getElementById('radio-cn').checked,
+      ex: document.getElementById('radio-ex').checked,
+      rate: parseFloat(document.getElementById('radio-rate').value)
+    };
+  }
+  function playRadio() {
+    if (!radio.list.length) { toast('当前等级没有词条'); return; }
+    if (!('speechSynthesis' in window)) { toast('当前浏览器不支持语音朗读'); return; }
+    radio.playing = true;
+    playCurrent();
+  }
+  function playCurrent() {
+    if (!radio.playing) return;
+    var w = radio.list[radio.idx];
+    if (!w) { pauseRadio(); return; }
+    radio.gen++;
+    renderRadio();
+    var opts = radioOpts();
+    var seq = [{ text: w.w, lang: 'en' }];
+    if (opts.cn && w.cn) seq.push({ text: String(w.cn).replace(/[；;].*$/, ''), lang: 'zh' }); // 释义只读第一条，免得太长
+    if (opts.ex && w.ex) seq.push({ text: w.ex, lang: 'en' });
+    playSeq(seq, 0, opts.rate, radio.gen);
+  }
+  function playSeq(seq, i, rate, gen) {
+    if (!radio.playing || gen !== radio.gen) return;
+    // 全部经 setTimeout 推下一轮事件循环：无语音环境下 onend 可能同步连发，
+    // 直接递归会把整本词表在一个调用栈里播完（爆栈）
+    if (i >= seq.length) { setTimeout(function () { stepRadio(1); }, 0); return; }
+    var u = makeUtter(seq[i].text, seq[i].lang, rate);
+    var done = false;
+    var finish = function () {
+      if (done) return; done = true;
+      clearTimeout(radio.watchdog);
+      setTimeout(function () { playSeq(seq, i + 1, rate, gen); }, 0);
+    };
+    u.onend = finish;
+    u.onerror = finish;
+    // 部分浏览器 onend 偶发不触发，按文本长度兜底推进
+    radio.watchdog = setTimeout(finish, Math.max(3000, seq[i].text.length * 300));
+    speechSynthesis.speak(u);
+  }
+  function stepRadio(d) {
+    if (!radio.list.length) return;
+    radio.idx = (radio.idx + d + radio.list.length) % radio.list.length;
+    if (radio.playing) { speechSynthesis.cancel(); playCurrent(); } else renderRadio();
+  }
+  function pauseRadio() {
+    radio.playing = false;
+    clearTimeout(radio.watchdog);
+    if ('speechSynthesis' in window) speechSynthesis.cancel();
+    renderRadio();
+  }
+  function stopRadio() {
+    if (radio.playing) pauseRadio();
+  }
+
+  /* ---------- 模式切换（闪卡/列表/随身听/拼写/同义替换） ---------- */
+  var quiz = { list: [], idx: 0, score: 0, answered: false };
+  var MODES = ['card', 'list', 'radio', 'quiz', 'para'];
+  var currentMode = 'card';
+  document.getElementById('mode-card').onclick = function () { enterMode('card'); };
+  document.getElementById('mode-list').onclick = function () { enterMode('list'); };
+  document.getElementById('mode-radio').onclick = function () { enterMode('radio'); };
+  document.getElementById('mode-quiz').onclick = function () { enterMode('quiz'); };
+  document.getElementById('mode-para').onclick = function () { enterMode('para'); };
+  function setMode(m) {
+    currentMode = m;
+    MODES.forEach(function (x) {
+      document.getElementById('word-' + x + '-stage').style.display = x === m ? 'block' : 'none';
+      document.getElementById('mode-' + x).className = 'btn btn-sm ' + (x === m ? 'btn-dark' : 'btn-ghost');
+    });
+    if (m !== 'radio') stopRadio(); // 离开随身听立刻停止播报
+  }
+  function enterMode(m) {
+    setMode(m);
+    if (m === 'card') startCard(cardState.cat);
+    else if (m === 'list') startList();
+    else if (m === 'radio') startRadio();
+    else if (m === 'quiz') startQuiz();
+    else if (m === 'para') startPara();
+  }
+  function shuffle(a) { a = a.slice(); for (var i = a.length - 1; i > 0; i--) { var j = Math.floor(Math.random() * (i + 1)); var t = a[i]; a[i] = a[j]; a[j] = t; } return a; }
+  function startQuiz() {
+    var pool;
+    if (cardState.level === 'ielts') {
+      pool = cardState.cat === 'all' ? D.WORDS : D.WORDS.filter(function (w) { return w.cat === cardState.cat; });
+    } else {
+      pool = levelList(cardState.level);
+    }
+    quiz.list = shuffle(pool).slice(0, Math.min(10, pool.length));
+    quiz.idx = 0; quiz.score = 0; quiz.answered = false;
+    renderQuiz();
+  }
+  function normWord(s) { return s.trim().toLowerCase().replace(/[^a-z-]/g, ''); }
+  function renderQuiz() {
+    var w = quiz.list[quiz.idx], stage = document.getElementById('word-quiz-stage');
+    stage.innerHTML =
+      '<div class="study-bar"><span class="study-count">第 ' + (quiz.idx + 1) + ' / ' + quiz.list.length + ' 题 · 得分 ' + quiz.score + '</span>' +
+      '<div class="progress-line"><i style="width:' + quiz.idx / quiz.list.length * 100 + '%"></i></div></div>' +
+      '<div class="panel panel-pad">' +
+        '<div class="quiz-q">' + w.pos + ' ' + w.cn + '</div>' +
+        '<div class="quiz-hint">' + catName(w.cat) + ' · 根据中文释义拼写英文单词 <button class="btn btn-sm btn-ghost" id="q-speak" style="margin-left:8px">🔊 听音</button></div>' +
+        '<input class="input" id="q-input" placeholder="输入英文单词后回车" autocomplete="off" autocapitalize="off" spellcheck="false">' +
+        '<div class="quiz-feedback" id="q-fb"></div>' +
+        '<div style="margin-top:16px"><button class="btn btn-primary" id="q-submit">提交</button></div>' +
+      '</div>';
+    var input = document.getElementById('q-input');
+    input.focus();
+    document.getElementById('q-speak').onclick = function () { speak(w.w); };
+    function submit() {
+      if (quiz.answered) { advance(); return; }
+      var val = normWord(input.value);
+      quiz.answered = true;
+      var ok = val === normWord(w.w);
+      input.classList.add(ok ? 'good' : 'bad');
+      if (ok) quiz.score++;
+      document.getElementById('q-fb').innerHTML = ok
+        ? '<span style="color:var(--moss);font-weight:700">✓ 正确！</span> ' + w.w + ' ' + w.ph
+        : '<span style="color:var(--cinnabar);font-weight:700">✗ 正确答案：' + w.w + '</span><br><span class="muted small">' + w.ex + '</span>';
+      document.getElementById('q-submit').textContent = quiz.idx === quiz.list.length - 1 ? '查看成绩' : '下一题';
+    }
+    document.getElementById('q-submit').onclick = submit;
+    input.onkeydown = function (e) { if (e.key === 'Enter') submit(); };
+  }
+  function advance() {
+    quiz.answered = false;
+    if (quiz.idx < quiz.list.length - 1) { quiz.idx++; renderQuiz(); }
+    else {
+      var pct = Math.round(quiz.score / quiz.list.length * 100);
+      var s = loadStore(); s.quizBest = Math.max(s.quizBest || 0, quiz.score); saveStore({ quizBest: s.quizBest });
+      var msg = pct >= 90 ? '出色，7 分词汇功底！' : pct >= 60 ? '不错，把错词再过一遍。' : '别灰心，回到闪卡模式多刷两轮。';
+      document.getElementById('word-quiz-stage').innerHTML =
+        '<div class="panel panel-pad score-hero"><div class="big">' + quiz.score + ' / ' + quiz.list.length + '</div>' +
+        '<p>' + msg + '</p><div style="margin-top:18px;display:flex;gap:10px;justify-content:center">' +
+        '<button class="btn btn-primary" id="q-again">再来一组</button>' +
+        '<button class="btn btn-ghost" id="q-back">返回闪卡</button></div></div>';
+      document.getElementById('q-again').onclick = startQuiz;
+      document.getElementById('q-back').onclick = function () { setMode('card'); startCard(cardState.cat); };
+    }
+  }
+
+  /* ---------- 同义替换测验 ---------- */
+  var para = { list: [], idx: 0, score: 0, answered: false };
+  function startPara() {
+    para.list = shuffle(D.PARAPHRASE).slice(0, Math.min(10, D.PARAPHRASE.length));
+    para.idx = 0; para.score = 0; para.answered = false;
+    renderPara();
+  }
+  function renderPara() {
+    var q = para.list[para.idx], stage = document.getElementById('word-para-stage');
+    stage.innerHTML =
+      '<div class="study-bar"><span class="study-count">第 ' + (para.idx + 1) + ' / ' + para.list.length + ' 题 · 得分 ' + para.score + '</span>' +
+      '<div class="progress-line"><i style="width:' + para.idx / para.list.length * 100 + '%"></i></div></div>' +
+      '<div class="panel panel-pad">' +
+        '<div class="quiz-hint">选出与原句意思最接近的改写 <button class="btn btn-sm btn-ghost" id="p-speak" style="margin-left:8px">🔊 听原句</button></div>' +
+        '<div class="para-orig">' + esc(q.orig) + '</div>' +
+        '<div id="p-opts">' + q.opts.map(function (o, j) {
+          return '<button class="opt-btn" data-j="' + j + '"><span class="opt-letter">' + String.fromCharCode(65 + j) + '.</span>' + esc(o) + '</button>';
+        }).join('') + '</div>' +
+        '<div class="quiz-feedback" id="p-fb"></div>' +
+        '<div style="margin-top:14px"><button class="btn btn-primary" id="p-next" style="visibility:hidden">下一题</button></div>' +
+      '</div>';
+    document.getElementById('p-speak').onclick = function () { speak(q.orig); };
+    var nextBtn = document.getElementById('p-next');
+    nextBtn.textContent = para.idx === para.list.length - 1 ? '查看成绩' : '下一题';
+    stage.querySelectorAll('.opt-btn').forEach(function (b) {
+      b.onclick = function () {
+        if (para.answered) return;
+        para.answered = true;
+        var pick = Number(b.dataset.j), ok = pick === q.a;
+        if (ok) para.score++;
+        stage.querySelectorAll('.opt-btn').forEach(function (x) {
+          x.disabled = true;
+          var j = Number(x.dataset.j);
+          if (j === q.a) x.classList.add('correct');
+          else if (j === pick) x.classList.add('wrong');
+        });
+        document.getElementById('p-fb').innerHTML =
+          (ok ? '<span style="color:var(--moss);font-weight:700">✓ 正确！</span>' : '<span style="color:var(--cinnabar);font-weight:700">✗ 正确答案：' + String.fromCharCode(65 + q.a) + '</span>') +
+          '<br><span class="muted small">' + esc(q.why) + '</span>';
+        document.getElementById('p-fb').className = 'quiz-feedback q-why show';
+        nextBtn.style.visibility = 'visible';
+        nextBtn.focus();
+      };
+    });
+    nextBtn.onclick = function () {
+      para.answered = false;
+      if (para.idx < para.list.length - 1) { para.idx++; renderPara(); }
+      else {
+        var pct = Math.round(para.score / para.list.length * 100);
+        var s = loadStore(); s.paraBest = Math.max(s.paraBest || 0, para.score); saveStore({ paraBest: s.paraBest });
+        var msg = pct >= 90 ? '出色，你已掌握雅思的底层逻辑！' : pct >= 60 ? '不错，注意偷换因果与过度绝对两类陷阱。' : '多刷几组，正确答案永远是「换说法不换意思」。';
+        stage.innerHTML =
+          '<div class="panel panel-pad score-hero"><div class="big">' + para.score + ' / ' + para.list.length + '</div>' +
+          '<p>' + msg + '</p><div style="margin-top:18px;display:flex;gap:10px;justify-content:center">' +
+          '<button class="btn btn-primary" id="p-again">再来一组</button>' +
+          '<button class="btn btn-ghost" id="p-back">返回闪卡</button></div></div>';
+        document.getElementById('p-again').onclick = startPara;
+        document.getElementById('p-back').onclick = function () { setMode('card'); startCard(cardState.cat); };
+      }
+    };
+  }
+
+  /* ---------------- 听力 ---------------- */
+  var lis = { level: 0, idx: 0, tries: 0, rate: 1, done: false };
+  function listenList() { return lis.level ? allListening().filter(function (x) { return x.level === lis.level; }) : allListening(); }
+  document.getElementById('listen-chips').addEventListener('click', function (e) {
+    var b = e.target.closest('.chip'); if (!b) return;
+    lis.level = Number(b.dataset.level); lis.idx = 0; lis.tries = 0; lis.done = false;
+    document.querySelectorAll('#listen-chips .chip').forEach(function (c) { c.classList.toggle('on', c === b); });
+    renderListen();
+  });
+  function blanked(sentence, answer) {
+    return esc(sentence).replace(esc(answer), '<span class="blank-word" id="listen-blank">______</span>');
+  }
+  function renderListen() {
+    var list = listenList(), item = list[lis.idx], stage = document.getElementById('listen-stage');
+    var reveal = lis.done;
+    stage.innerHTML =
+      '<div class="study-bar"><span class="study-count">' + (lis.idx + 1) + ' / ' + list.length + '</span>' +
+      '<div class="progress-line"><i style="width:' + (lis.idx / list.length * 100) + '%"></i></div>' +
+      '<span class="tag tag-red">难度 ' + '★'.repeat(item.level) + '</span></div>' +
+      '<div class="panel panel-pad">' +
+        '<div class="listen-controls">' +
+          '<button class="btn btn-primary btn-sm" id="play-sentence">🔊 播放句子</button>' +
+          '<div class="speed-pick">' +
+            [0.8, 1, 1.2].map(function (r) {
+              return '<button data-rate="' + r + '" class="' + (lis.rate === r ? 'on' : '') + '">' + (r === 1 ? '正常' : r + 'x') + '</button>';
+            }).join('') +
+          '</div>' +
+          '<span class="tries">剩余播放次数 ' + (5 - lis.tries) + '</span>' +
+        '</div>' +
+        '<div class="listen-sentence" id="sentence-view">' + blanked(item.sentence, item.answer) + '</div>' +
+        '<input class="input" id="listen-input" placeholder="输入听到的缺失单词" autocomplete="off" autocapitalize="off" spellcheck="false" style="max-width:340px">' +
+        '<div class="quiz-feedback" id="listen-fb"></div>' +
+        '<div style="margin-top:14px;display:flex;gap:10px;align-items:center;flex-wrap:wrap">' +
+          '<button class="btn btn-primary btn-sm" id="listen-submit">提交</button>' +
+          (reveal ? '' : '<button class="btn btn-ghost btn-sm" id="listen-reveal">直接看答案</button>') +
+          '<button class="btn btn-ghost btn-sm" id="listen-next">' + (lis.idx === list.length - 1 ? '回到第一题' : '下一句 →') + '</button>' +
+        '</div>' +
+      '</div>';
+    var input = document.getElementById('listen-input');
+    function play() {
+      if (!('speechSynthesis' in window)) { toast('当前浏览器不支持语音朗读'); return; }
+      if (lis.tries >= 5) { toast('本句播放次数已用完'); return; }
+      lis.tries++; speak(item.sentence, lis.rate);
+      renderListenTries();
+    }
+    document.getElementById('play-sentence').onclick = play;
+    document.querySelectorAll('.speed-pick button').forEach(function (b) {
+      b.onclick = function () {
+        // 只切换语速与高亮，不重渲染，保留已输入答案
+        lis.rate = Number(b.dataset.rate);
+        document.querySelectorAll('.speed-pick button').forEach(function (x) {
+          x.classList.toggle('on', Number(x.dataset.rate) === lis.rate);
+        });
+      };
+    });
+    function renderListenTries() {
+      var t = document.querySelector('.tries'); if (t) t.textContent = '剩余播放次数 ' + (5 - lis.tries);
+    }
+    function grade(okFlag) {
+      if (lis.done) return;
+      var val = normWord(input.value), ok = okFlag === true ? false : val === normWord(item.answer);
+      lis.done = true;
+      document.getElementById('sentence-view').innerHTML = esc(item.sentence).replace(esc(item.answer), '<span class="blank-word" style="border-color:var(--moss);color:var(--moss)">' + item.answer + '</span>');
+      document.getElementById('listen-fb').innerHTML =
+        (ok ? '<span style="color:var(--moss);font-weight:700">✓ 听写正确！</span>' : '<span style="color:var(--cinnabar);font-weight:700">✗ 正确答案：' + item.answer + '</span>') +
+        '<br><span class="muted">' + item.cn + '</span>';
+      if (ok) {
+        var s = loadStore(); s.listenOk = Array.from(new Set((s.listenOk || []).concat([item.sentence]))); saveStore({ listenOk: s.listenOk });
+      }
+    }
+    document.getElementById('listen-submit').onclick = function () {
+      if (!input.value.trim()) { input.focus(); return; }
+      grade();
+    };
+    input.onkeydown = function (e) { if (e.key === 'Enter') document.getElementById('listen-submit').click(); };
+    var rev = document.getElementById('listen-reveal');
+    if (rev) rev.onclick = function () {
+      input.value = item.answer; grade(true);
+    };
+    document.getElementById('listen-next').onclick = function () {
+      lis.idx = (lis.idx + 1) % list.length; lis.tries = 0; lis.done = false; renderListen();
+    };
+  }
+
+  /* ---------------- 篇章听力（对话 + 短文讲座） ---------------- */
+  var lp = { tab: 'dict', part: 0, ans: {}, playing: false, gen: 0, turn: -1, showText: false, rate: 1, watchdog: 0 };
+  document.getElementById('listen-tabs').addEventListener('click', function (e) {
+    var b = e.target.closest('.chip'); if (!b) return;
+    lp.tab = b.dataset.ltab;
+    document.querySelectorAll('#listen-tabs .chip').forEach(function (c) { c.classList.toggle('on', c === b); });
+    var isDict = lp.tab === 'dict';
+    document.getElementById('listen-chips').style.display = isDict ? '' : 'none';
+    document.getElementById('listen-stage').style.display = isDict ? '' : 'none';
+    document.getElementById('listen-part-stage').style.display = isDict ? 'none' : '';
+    stopPart();
+    if (!isDict) { lp.part = 0; lp.showText = false; renderPart(); }
+  });
+  function partList() {
+    return D.LISTEN_PARTS.filter(function (p) { return p.type === (lp.tab === 'lecture' ? 'lecture' : 'dialogue'); });
+  }
+  function partItems(p) {
+    return p.type === 'dialogue' ? p.turns : p.paragraphs.map(function (t) { return { who: '', text: t }; });
+  }
+  function partAns() {
+    if (!lp.ans[lp.part]) lp.ans[lp.part] = { pick: {}, graded: false, score: 0 };
+    return lp.ans[lp.part];
+  }
+  function renderPart() {
+    var list = partList(), p = list[lp.part], a = partAns();
+    var s = loadStore(), doneMap = s.partOk || {};
+    var stage = document.getElementById('listen-part-stage');
+    var items = partItems(p);
+    stage.innerHTML =
+      '<div class="chips" style="margin-bottom:14px">' + list.map(function (x, i) {
+        var done = doneMap[x.title];
+        return '<button class="chip' + (i === lp.part ? ' on' : '') + '" data-part="' + i + '">' +
+          esc(x.title) + (done != null ? ' · ' + done + '/' + x.questions.length + '✓' : '') + '</button>';
+      }).join('') + '</div>' +
+      '<div class="panel panel-pad">' +
+        '<div style="display:flex;gap:8px;align-items:center;flex-wrap:wrap;margin-bottom:6px">' +
+          '<span class="tag tag-red">' + esc(p.scene) + '</span>' +
+          '<span class="tag">' + '★'.repeat(p.level) + '</span>' +
+        '</div>' +
+        '<h3 style="margin:0 0 12px;font-family:var(--font-serif)">' + esc(p.title) + '</h3>' +
+        '<div class="listen-controls">' +
+          '<button class="btn btn-primary btn-sm" id="part-play">▶ 播放整篇</button>' +
+          '<label class="small muted">语速 <select id="part-rate">' +
+            [0.8, 1, 1.25].map(function (r) {
+              return '<option value="' + r + '"' + (lp.rate === r ? ' selected' : '') + '>' + (r === 1 ? '常速' : r + 'x') + '</option>';
+            }).join('') + '</select></label>' +
+          '<button class="btn btn-ghost btn-sm" id="part-text-toggle">' + (lp.showText ? '🙈 隐藏原文' : '📖 显示原文') + '</button>' +
+          '<span class="tries" id="part-progress">' + items.length + ' ' + (p.type === 'dialogue' ? '轮对话' : '段') + '</span>' +
+        '</div>' +
+        '<div id="part-transcript">' + (lp.showText ?
+          items.map(function (t, i) {
+            return '<div class="turn-row" data-turn="' + i + '">' +
+              (t.who ? '<span class="turn-who who-' + t.who + '">' + t.who + '</span>' : '<span class="turn-who">§</span>') +
+              '<span class="turn-text">' + esc(t.text) + '</span>' +
+              '<button class="speak-btn turn-replay" data-turn="' + i + '" title="复读本句">🔊</button></div>';
+          }).join('')
+          : '<p class="muted small" style="margin:6px 0 0">原文已隐藏 —— 先专心听，听完或对答案时再点开对照。每句右侧 🔊 可单独复读。</p>') +
+        '</div>' +
+        '<div class="part-qs">' + p.questions.map(function (q, qi) {
+          var pick = a.pick[qi];
+          return '<div class="part-q">' +
+            '<p class="part-q-t">' + (qi + 1) + '. ' + esc(q.q) + '</p>' +
+            q.opts.map(function (o, oi) {
+              var cls = 'part-opt';
+              if (a.graded) {
+                if (oi === q.ans) cls += ' ok';
+                else if (pick === oi) cls += ' bad';
+              }
+              return '<label class="' + cls + '"><input type="radio" name="pq' + qi + '" value="' + oi + '"' +
+                (pick === oi ? ' checked' : '') + (a.graded ? ' disabled' : '') + '> ' + esc(o) + '</label>';
+            }).join('') +
+            (a.graded ? '<p class="part-why">' + (pick === q.ans ? '✓ ' : '✗ ') + esc(q.why) + '</p>' : '') +
+          '</div>';
+        }).join('') + '</div>' +
+        '<div style="margin-top:14px;display:flex;gap:10px;align-items:center;flex-wrap:wrap">' +
+          (a.graded
+            ? '<span style="font-weight:700;color:' + (a.score === p.questions.length ? 'var(--moss)' : 'var(--cinnabar)') + '">得分 ' + a.score + ' / ' + p.questions.length + '</span>' +
+              '<button class="btn btn-ghost btn-sm" id="part-retry">🔄 重做本篇</button>'
+            : '<button class="btn btn-primary btn-sm" id="part-submit">提交答案</button>') +
+        '</div>' +
+      '</div>';
+    stage.querySelectorAll('.chip[data-part]').forEach(function (b) {
+      b.onclick = function () {
+        stopPart(); lp.part = Number(b.dataset.part); lp.showText = false; renderPart();
+      };
+    });
+    document.getElementById('part-play').onclick = function () {
+      lp.playing ? (stopPart(), renderPart()) : playPart(0);
+    };
+    document.getElementById('part-rate').onchange = function () { lp.rate = parseFloat(this.value); };
+    document.getElementById('part-text-toggle').onclick = function () { lp.showText = !lp.showText; renderPart(); };
+    stage.querySelectorAll('.turn-replay').forEach(function (b) {
+      b.onclick = function () { replayTurn(Number(b.dataset.turn)); };
+    });
+    stage.querySelectorAll('.part-q input[type=radio]').forEach(function (r) {
+      r.onchange = function () { partAns().pick[Number(r.name.slice(2))] = Number(r.value); };
+    });
+    var sub = document.getElementById('part-submit');
+    if (sub) sub.onclick = function () {
+      var a2 = partAns();
+      var unanswered = p.questions.filter(function (q, i) { return a2.pick[i] == null; }).length;
+      if (unanswered) { toast('还有 ' + unanswered + ' 题未作答'); return; }
+      var score = 0;
+      p.questions.forEach(function (q, i) { if (a2.pick[i] === q.ans) score++; });
+      a2.graded = true; a2.score = score;
+      var st = loadStore(); st.partOk = st.partOk || {}; st.partOk[p.title] = score;
+      saveStore({ partOk: st.partOk });
+      renderPart();
+    };
+    var retry = document.getElementById('part-retry');
+    if (retry) retry.onclick = function () {
+      lp.ans[lp.part] = { pick: {}, graded: false, score: 0 };
+      renderPart();
+    };
+  }
+  function partVoice(who) {
+    if (!who) return null;
+    var gb = voices.filter(function (v) { return /en[-_]GB/i.test(v.lang); });
+    var ens = voices.filter(function (v) { return /^en/i.test(v.lang); });
+    var pool = gb.length > 1 ? gb : ens;
+    return (who === 'B' ? pool[1] || pool[0] : pool[0]) || null;
+  }
+  function playPart(from) {
+    if (!('speechSynthesis' in window)) { toast('当前浏览器不支持语音朗读'); return; }
+    lp.playing = true; lp.gen++;
+    speechSynthesis.cancel();
+    playPartTurn(from, lp.gen);
+    var pb = document.getElementById('part-play');
+    if (pb) pb.innerHTML = '⏸ 停止播放';
+  }
+  function playPartTurn(i, gen) {
+    var p = partList()[lp.part], items = partItems(p);
+    if (!lp.playing || gen !== lp.gen) return;
+    if (i >= items.length) {
+      lp.playing = false; lp.turn = -1;
+      setTimeout(renderPart, 0);
+      return;
+    }
+    lp.turn = i;
+    updateTurnHighlight();
+    var it = items[i];
+    var u = makeUtter(it.text, 'en', lp.rate);
+    var v = partVoice(it.who);
+    if (v) u.voice = v;
+    var done = false;
+    var finish = function () {
+      if (done) return; done = true;
+      clearTimeout(lp.watchdog);
+      setTimeout(function () { playPartTurn(i + 1, gen); }, 0);
+    };
+    u.onend = finish; u.onerror = finish;
+    lp.watchdog = setTimeout(finish, Math.max(4000, it.text.length * 250));
+    speechSynthesis.speak(u);
+  }
+  function updateTurnHighlight() {
+    document.querySelectorAll('.turn-row').forEach(function (r, i) {
+      r.classList.toggle('turn-cur', i === lp.turn);
+    });
+    var prog = document.getElementById('part-progress');
+    if (prog && lp.turn >= 0) {
+      var items = partItems(partList()[lp.part]);
+      prog.textContent = '播放中 ' + (lp.turn + 1) + ' / ' + items.length;
+    }
+  }
+  function replayTurn(i) {
+    if (!('speechSynthesis' in window)) { toast('当前浏览器不支持语音朗读'); return; }
+    stopPart();
+    var it = partItems(partList()[lp.part])[i];
+    lp.turn = i; updateTurnHighlight();
+    var u = makeUtter(it.text, 'en', lp.rate);
+    var v = partVoice(it.who);
+    if (v) u.voice = v;
+    u.onend = u.onerror = function () {
+      setTimeout(function () { lp.turn = -1; updateTurnHighlight(); }, 0);
+    };
+    speechSynthesis.speak(u);
+    var pb = document.getElementById('part-play');
+    if (pb) pb.innerHTML = '▶ 播放整篇';
+  }
+  function stopPart() {
+    if (!lp.playing && lp.turn < 0) return;
+    lp.playing = false; lp.turn = -1; lp.gen++;
+    clearTimeout(lp.watchdog);
+    if ('speechSynthesis' in window) speechSynthesis.cancel();
+  }
+
+  /* ---------------- 阅读 ---------------- */
+  function renderReadingList() {
+    var s = loadStore(), done = s.readDone || [];
+    document.getElementById('reading-list').innerHTML =
+      '<div class="passage-list">' + D.READING.map(function (p, i) {
+        var best = s.readBest && s.readBest[p.id];
+        return '<button class="panel passage-row" data-pid="' + p.id + '">' +
+          '<span class="idx">' + String(i + 1).padStart(2, '0') + '</span>' +
+          '<span style="flex:1"><b style="font-family:var(--font-serif);font-size:18px">' + p.title + '</b><br>' +
+          '<span class="muted small">' + p.topic + ' · 建议 ' + p.minutes + ' 分钟 · ' + p.questions.length + ' 题</span></span>' +
+          (done.indexOf(p.id) >= 0 ? '<span class="tag tag-green">已完成 · ' + (best || '?') + '/' + p.questions.length + '</span>' : '<span class="tag">未做</span>') +
+        '</button>';
+      }).join('') + '</div>';
+    document.querySelectorAll('.passage-row').forEach(function (b) {
+      b.onclick = function () { openPassage(b.dataset.pid); };
+    });
+  }
+  var readingState = { id: null, answers: {} };
+  function openPassage(pid) {
+    readingState.id = pid; readingState.answers = {};
+    document.getElementById('reading-list').style.display = 'none';
+    var box = document.getElementById('reading-practice');
+    box.style.display = 'block';
+    renderPassage(false);
+    window.scrollTo(0, 0);
+  }
+  function renderPassage(graded) {
+    var p = D.READING.find(function (x) { return x.id === readingState.id; });
+    var box = document.getElementById('reading-practice');
+    box.innerHTML =
+      '<div style="margin-bottom:18px;display:flex;align-items:center;gap:12px;flex-wrap:wrap">' +
+        '<button class="btn btn-ghost btn-sm" id="back-read">← 文章列表</button>' +
+        '<span class="tag">' + p.topic + '</span><span class="muted small">建议用时 ' + p.minutes + ' 分钟</span>' +
+        (graded ? '<button class="btn btn-dark btn-sm" id="redo-read">重新做</button>' : '<button class="btn btn-primary btn-sm" id="grade-read">提交批改</button>') +
+        '<span id="read-score"></span>' +
+      '</div>' +
+      '<div class="reader-grid">' +
+        '<article class="panel panel-pad passage-text"><h2>' + p.title + '</h2><p class="muted small" style="margin:4px 0 16px">ACADEMIC READING</p>' +
+          p.paragraphs.map(function (t) { return '<p>' + esc(t) + '</p>'; }).join('') +
+        '</article>' +
+        '<aside class="panel panel-pad reader-sticky"><h3 style="font-family:var(--font-serif);margin-bottom:8px">Questions 1–' + p.questions.length + '</h3>' +
+          p.questions.map(function (q, i) {
+            var chosen = readingState.answers[i];
+            var body;
+            if (q.type === 'tfng') {
+              body = ['T', 'F', 'NG'].map(function (o) {
+                var cls = graded ? (o === q.a ? 'correct' : (o === chosen && chosen !== q.a ? 'wrong' : '')) : '';
+                return '<label class="opt ' + cls + '"><input type="radio" name="q' + i + '" value="' + o + '"' + (chosen === o ? ' checked' : '') +
+                  (graded ? ' disabled' : '') + '><span><b>' + ({ T: 'TRUE', F: 'FALSE', NG: 'NOT GIVEN' }[o]) + '</b></span></label>';
+              }).join('');
+            } else {
+              body = q.opts.map(function (o, j) {
+                var letter = String.fromCharCode(65 + j);
+                var cls = graded ? (letter === q.a ? 'correct' : (letter === chosen ? 'wrong' : '')) : '';
+                return '<label class="opt ' + cls + '"><input type="radio" name="q' + i + '" value="' + letter + '"' + (chosen === letter ? ' checked' : '') +
+                  (graded ? ' disabled' : '') + '><span>' + letter + '. ' + esc(o) + '</span></label>';
+              }).join('');
+            }
+            return '<div class="q-item"><div class="q-stem"><span class="qn">' + (i + 1) + '.</span>' +
+              (q.type === 'tfng' ? esc(q.q) + ' <span class="muted small">（TRUE / FALSE / NOT GIVEN）</span>' : esc(q.q)) + '</div>' +
+              body + '<div class="q-why ' + (graded ? 'show' : '') + '"><b>答案 ' + q.a + '：</b>' + esc(q.why) + '</div></div>';
+          }).join('') +
+        '</aside>' +
+      '</div>';
+    document.getElementById('back-read').onclick = function () {
+      box.style.display = 'none';
+      document.getElementById('reading-list').style.display = 'block';
+      renderReadingList();
+    };
+    box.querySelectorAll('input[type=radio]').forEach(function (r) {
+      r.onchange = function () {
+        var name = r.name.slice(1);
+        readingState.answers[name] = r.value;
+      };
+    });
+    var gradeBtn = document.getElementById('grade-read');
+    if (gradeBtn) gradeBtn.onclick = function () {
+      var unanswered = p.questions.filter(function (_, i) { return !readingState.answers[i]; }).length;
+      if (unanswered) { toast('还有 ' + unanswered + ' 题未作答'); return; }
+      renderPassage(true);
+      var score = p.questions.filter(function (q, i) { return readingState.answers[i] === q.a; }).length;
+      document.getElementById('read-score').innerHTML = '<b style="color:var(--cinnabar)">得分 ' + score + ' / ' + p.questions.length + '</b>';
+      var s = loadStore();
+      s.readDone = Array.from(new Set((s.readDone || []).concat([p.id])));
+      s.readBest = s.readBest || {}; s.readBest[p.id] = Math.max(s.readBest[p.id] || 0, score);
+      saveStore({ readDone: s.readDone, readBest: s.readBest });
+      window.scrollTo({ top: 0, behavior: 'smooth' });
+    };
+    var redo = document.getElementById('redo-read');
+    if (redo) redo.onclick = function () { readingState.answers = {}; renderPassage(false); };
+  }
+
+  /* ---------------- 写作 ---------------- */
+  var writing = { id: D.WRITING[0].id, remaining: 0, running: false, timerId: null };
+  function wordCount(text) {
+    var m = text.trim().match(/[A-Za-z0-9'’-]+/g);
+    return m ? m.length : 0;
+  }
+  function renderWritingList() {
+    document.getElementById('writing-list').innerHTML =
+      D.WRITING.map(function (p) {
+        var s = loadStore(), has = (s.drafts || {})[p.id];
+        return '<button class="prompt-item ' + (p.id === writing.id ? 'on' : '') + '" data-wid="' + p.id + '">' +
+          '<span class="tag">' + p.type + '</span> ' +
+          '<b>' + (p.model ? '📝' : '🏗') + ' ' + p.typeCn + ' · ' + p.time + ' 分钟</b>' +
+          '<div class="small" style="opacity:.75;margin-top:4px">' + esc(p.prompt.slice(0, 72)) + '…</div>' +
+          (has ? '<div class="small" style="margin-top:4px;color:var(--cinnabar)">📌 有未完成草稿</div>' : '') +
+        '</button>';
+      }).join('');
+    document.querySelectorAll('.prompt-item').forEach(function (b) {
+      b.onclick = function () { stopTimer(); writing.id = b.dataset.wid; renderWritingList(); renderWritingWork(); };
+    });
+  }
+  function stopTimer() {
+    writing.running = false;
+    if (writing.timerId) clearInterval(writing.timerId);
+    writing.timerId = null;
+  }
+  function fmt(sec) {
+    var m = Math.floor(sec / 60), r = sec % 60;
+    return String(m).padStart(2, '0') + ':' + String(r).padStart(2, '0');
+  }
+  function renderWritingWork() {
+    var p = D.WRITING.find(function (x) { return x.id === writing.id; });
+    var s = loadStore();
+    var draft = (s.drafts || {})[p.id] || '';
+    stopTimer();
+    writing.remaining = p.time * 60;
+    var box = document.getElementById('writing-work');
+    box.innerHTML =
+      '<div class="panel panel-pad">' +
+        '<div style="margin-bottom:10px"><span class="tag tag-red">' + p.type + '</span> <span class="tag">' + p.typeCn + '</span></div>' +
+        '<h2 style="font-family:var(--font-serif);font-size:20px;margin-bottom:6px">' + esc(p.prompt) + '</h2>' +
+        '<p class="muted small">' + esc(p.promptCn) + '</p>' +
+        (p.table ? '<table class="data-table"><caption class="small muted" style="caption-side:top;text-align:left;margin-bottom:6px">' + esc(p.table.caption) + '</caption>' +
+          '<tr>' + p.table.head.map(function (h) { return '<th>' + h + '</th>'; }).join('') + '</tr>' +
+          p.table.rows.map(function (r) { return '<tr>' + r.map(function (c) { return '<td>' + c + '</td>'; }).join('') + '</tr>'; }).join('') + '</table>' : '') +
+        '<div class="write-toolbar">' +
+          '<span class="timer" id="w-timer">' + fmt(writing.remaining) + '</span>' +
+          '<button class="btn btn-dark btn-sm" id="w-start">▶ 开始计时</button>' +
+          '<button class="btn btn-ghost btn-sm" id="w-reset">↺ 重置</button>' +
+          '<span class="word-count" id="w-count">字数 <b>' + wordCount(draft) + '</b> / ' + p.minWords + '</span>' +
+        '</div>' +
+        '<textarea class="write-area" id="w-text" placeholder="在此输入你的作文…（自动保存到本机）">' + esc(draft) + '</textarea>' +
+        '<div style="margin-top:14px;display:flex;gap:10px;flex-wrap:wrap">' +
+          '<button class="btn btn-primary btn-sm" id="w-save">💾 保存草稿</button>' +
+          '<button class="btn btn-ghost btn-sm" id="w-clear">清空</button>' +
+          '<button class="btn btn-ghost btn-sm" id="w-toggle">📖 ' + (p.model ? '查看提纲 / 范文' : '查看提纲 / 句库') + '</button>' +
+        '</div>' +
+        '<div class="model-essay" id="w-model">' +
+          '<h4>解题提纲</h4><ul class="outline-list">' + p.outline.map(function (o) { return '<li>' + esc(o) + '</li>'; }).join('') + '</ul>' +
+          (p.model ? '<h4 style="margin-top:18px">7 分参考范文（约 ' + wordCount(p.model) + ' 词）</h4><p>' + esc(p.model) + '</p>' :
+            '<div class="tip3" style="margin-top:14px"><b>本题练习说明：</b>本题提供完整提纲，请先独立完成，再用 Task 2 自评清单检查；写完后可找老师或 AI 批改。</div>') +
+          '<h4 style="margin-top:18px">Task 2 自评清单</h4>' +
+          '<ul class="checklist"><li>立场在开头与结尾一致出现</li><li>每个主体段有明确中心句</li><li>使用了衔接词但不堆砌</li><li>至少 2 个复杂句（定语从句/让步/条件）</li><li>检查第三人称单数、时态、冠词、复数</li><li>字数 ≥ ' + p.minWords + '</li></ul>' +
+        '</div>' +
+      '</div>';
+    var area = document.getElementById('w-text'), wc = document.getElementById('w-count'), timerEl = document.getElementById('w-timer');
+    function updateCount() {
+      var n = wordCount(area.value);
+      wc.innerHTML = '字数 <b>' + n + '</b> / ' + p.minWords;
+      wc.classList.toggle('under', n < p.minWords);
+    }
+    updateCount();
+    var saveTimer;
+    area.oninput = function () {
+      updateCount();
+      clearTimeout(saveTimer);
+      saveTimer = setTimeout(function () {
+        var st = loadStore(); st.drafts = st.drafts || {}; st.drafts[p.id] = area.value; saveStore({ drafts: st.drafts });
+      }, 600);
+    };
+    document.getElementById('w-save').onclick = function () {
+      var st = loadStore(); st.drafts = st.drafts || {}; st.drafts[p.id] = area.value; saveStore({ drafts: st.drafts });
+      toast('草稿已保存');
+    };
+    document.getElementById('w-clear').onclick = function () {
+      if (!confirm('确定清空这篇草稿？')) return;
+      area.value = ''; updateCount();
+      var st = loadStore(); st.drafts = st.drafts || {}; delete st.drafts[p.id]; saveStore({ drafts: st.drafts });
+    };
+    document.getElementById('w-toggle').onclick = function () {
+      document.getElementById('w-model').classList.toggle('show');
+    };
+    document.getElementById('w-start').onclick = function () {
+      if (writing.running) {
+        writing.running = false; clearInterval(writing.timerId);
+        this.textContent = '▶ 继续';
+        return;
+      }
+      writing.running = true;
+      this.textContent = '⏸ 暂停';
+      writing.timerId = setInterval(function () {
+        writing.remaining--;
+        timerEl.textContent = fmt(Math.max(0, writing.remaining));
+        timerEl.classList.toggle('danger', writing.remaining <= 300);
+        if (writing.remaining <= 0) {
+          stopTimer();
+          document.getElementById('w-start').textContent = '⏰ 时间到';
+          toast('⏰ 时间到！对照范文自评吧');
+        }
+      }, 1000);
+    };
+    document.getElementById('w-reset').onclick = function () {
+      stopTimer(); writing.remaining = p.time * 60;
+      timerEl.textContent = fmt(writing.remaining); timerEl.classList.remove('danger');
+      document.getElementById('w-start').textContent = '▶ 开始计时';
+    };
+  }
+
+  /* ---------------- 口语 ---------------- */
+  function renderSpeaking() {
+    document.getElementById('cue-grid').innerHTML = D.SPEAKING.part2.map(function (c) {
+      return '<div class="cue-card" id="cue-' + c.id + '">' +
+        '<h3>' + esc(c.cue) + '</h3><ul>You should say:' +
+        c.bullets.map(function (b) { return '<li>' + esc(b) + '</li>'; }).join('') + '</ul>' +
+        '<div class="cue-timer"><div class="phase" id="phase-' + c.id + '">准备 60 秒</div>' +
+        '<div class="clock prep" id="clock-' + c.id + '">1:00</div></div>' +
+        '<div style="display:flex;gap:8px;flex-wrap:wrap;justify-content:center;margin:10px 0">' +
+          '<button class="btn btn-dark btn-sm" data-act="prep" data-id="' + c.id + '">⏱ 开始准备</button>' +
+          '<button class="btn btn-primary btn-sm" data-act="speak" data-id="' + c.id + '">🎙 开始录音作答</button>' +
+        '</div>' +
+        '<div id="rec-area-' + c.id + '"></div>' +
+        '<details style="margin-top:10px"><summary class="small" style="cursor:pointer;color:var(--ink-soft)">📖 查看 7 分示范答案</summary>' +
+        '<p style="white-space:pre-line;font-size:13.5px;color:var(--ink-soft);margin-top:10px;line-height:1.9">' + esc(c.model) + '</p></details>' +
+      '</div>';
+    }).join('');
+
+    document.getElementById('part1-list').innerHTML = D.SPEAKING.part1.map(function (t) {
+      return '<h3 style="font-family:var(--font-serif);margin:14px 0 6px">' + t.icon + ' ' + esc(t.topic) + '</h3>' +
+        t.items.map(function (it) {
+          return '<details class="faq"><summary>' + esc(it.q) + '</summary><div class="ans">' + esc(it.a) + '</div></details>';
+        }).join('');
+    }).join('');
+
+    document.getElementById('part3-list').innerHTML = D.SPEAKING.part3.map(function (p, i) {
+      return '<details class="faq" ' + (i === 0 ? 'open' : '') + '><summary>' + (i + 1) + '. ' + esc(p.q) + '</summary>' +
+        '<div class="tip3"><b>答题骨架</b><ul>' + p.tips.map(function (t) { return '<li>' + esc(t) + '</li>'; }).join('') + '</ul></div></details>';
+    }).join('');
+  }
+
+  var cueTimers = {};
+  function clearCue(id) { if (cueTimers[id]) { clearInterval(cueTimers[id]); delete cueTimers[id]; } }
+  document.getElementById('cue-grid').addEventListener('click', function (e) {
+    var b = e.target.closest('button[data-act]'); if (!b) return;
+    var id = b.dataset.id, act = b.dataset.act;
+    // 停掉所有题卡的计时器与录音（含本题卡重开），避免麦克风/计时器并行
+    Object.keys(cueTimers).forEach(function (tid) { clearCue(tid); });
+    stopAllRecorders();
+    if (act === 'prep') runCueTimer(id, 60, 'prep', '准备中…');
+    if (act === 'speak') { runCueTimer(id, 120, 'speak', '录音作答中'); startRecorder(id); }
+  });
+  function runCueTimer(id, secs, cls, label) {
+    var clock = document.getElementById('clock-' + id), phaseEl = document.getElementById('phase-' + id);
+    var left = secs;
+    clock.className = 'clock ' + cls;
+    phaseEl.textContent = label;
+    clock.textContent = fmt(left);
+    cueTimers[id] = setInterval(function () {
+      left--;
+      clock.textContent = fmt(Math.max(0, left));
+      if (left <= 0) {
+        clearCue(id);
+        phaseEl.textContent = '时间到';
+        clock.textContent = '00:00';
+        if (cls === 'speak') stopRecorder(id);
+        toast(cls === 'prep' ? '准备结束，开始作答！' : '⏰ 两分钟到！');
+      }
+    }, 1000);
+  }
+
+  /* MediaRecorder 录音 */
+  var recs = {}, blobUrls = {};
+  function startRecorder(id) {
+    var area = document.getElementById('rec-area-' + id);
+    if (!navigator.mediaDevices || !window.MediaRecorder) {
+      area.innerHTML = '<div class="tip3">当前浏览器不支持录音（file:// 下部分浏览器会限制麦克风），可改用手机计时自练。</div>';
+      return;
+    }
+    navigator.mediaDevices.getUserMedia({ audio: true }).then(function (stream) {
+      var chunks = [], mr = new MediaRecorder(stream);
+      mr.ondataavailable = function (e) { chunks.push(e.data); };
+      mr.onstop = function () {
+        stream.getTracks().forEach(function (t) { t.stop(); });
+        var url = URL.createObjectURL(new Blob(chunks, { type: 'audio/webm' }));
+        // 释放本题卡上一条 blob URL，避免泄漏
+        (blobUrls[id] || []).forEach(function (u) { URL.revokeObjectURL(u); });
+        blobUrls[id] = [url];
+        area.innerHTML = '<div style="text-align:center;margin-top:8px"><span class="small muted">回听你的作答：</span><br>' +
+          '<audio controls src="' + url + '" style="margin-top:8px;width:100%"></audio></div>';
+      };
+      recs[id] = mr; mr.start();
+      area.innerHTML = '<div style="text-align:center;color:var(--cinnabar);font-size:13.5px;margin-top:6px"><span class="rec-dot"></span>录音中…再次点击其他按钮会自动停止</div>';
+    }).catch(function () {
+      area.innerHTML = '<div class="tip3">麦克风权限被拒绝，可在浏览器地址栏允许麦克风后重试。</div>';
+    });
+  }
+  function stopRecorder(id) { if (recs[id] && recs[id].state !== 'inactive') recs[id].stop(); }
+  function stopAllRecorders() {
+    Object.keys(recs).forEach(function (rid) { stopRecorder(rid); });
+  }
+
+  /* ---------------- 初始化 ---------------- */
+  renderWordChips();
+  startCard('all');
+  renderListen();
+  renderReadingList();
+  renderWritingList();
+  renderWritingWork();
+  renderSpeaking();
+  renderDashboard();
+  if (location.hash) {
+    var h = location.hash.slice(1);
+    if (document.getElementById('page-' + h)) go(h);
+  }
+})();

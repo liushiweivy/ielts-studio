@@ -1,0 +1,54 @@
+.chip-scroll { width: 100%; white-space: nowrap; margin: 0 -28rpx 8rpx; padding: 0 28rpx; }
+.chip-line { flex-wrap: nowrap; width: max-content; margin-bottom: 20rpx; }
+
+.mode-switch { display: flex; gap: 14rpx; margin-bottom: 26rpx; }
+
+.flashcard { position: relative; min-height: 560rpx; perspective: 2000rpx; margin-bottom: 26rpx; }
+.flash-inner {
+  position: relative; width: 100%; min-height: 560rpx;
+  transition: transform .55s cubic-bezier(.2,.8,.2,1);
+  transform-style: preserve-3d;
+}
+.flashcard.flipped .flash-inner { transform: rotateY(180deg); }
+.flash-face {
+  position: absolute; inset: 0; backface-visibility: hidden; -webkit-backface-visibility: hidden;
+  border: 1rpx solid #ddd2bb; border-radius: 28rpx; background: #fbf7ee;
+  box-shadow: 0 2rpx 0 rgba(33,28,21,.05), 0 20rpx 44rpx -28rpx rgba(33,28,21,.4);
+  padding: 40rpx; display: flex; flex-direction: column;
+  box-sizing: border-box;
+}
+.flash-back {
+  transform: rotateY(180deg); background: #211c15; color: #f5efe2; border-color: #211c15;
+}
+.flash-top { display: flex; justify-content: space-between; align-items: center; }
+.speak {
+  width: 72rpx; height: 72rpx; border-radius: 50%; border: 2rpx solid #c0452f;
+  background: transparent; color: #c0452f; font-size: 30rpx; line-height: 1;
+  padding: 0; display: flex; align-items: center; justify-content: center;
+}
+.speak.speak-light { border-color: #e8a092; color: #e8a092; }
+.flash-word { font-size: 84rpx; font-weight: 900; margin: auto 0 8rpx; }
+.flash-ph { color: #c0452f; font-size: 30rpx; }
+.flash-pos { color: #8d8170; font-size: 24rpx; }
+.flash-hint { text-align: center; margin-top: auto; }
+.flash-cn { font-size: 48rpx; color: #f3dfa8; margin-bottom: 22rpx; }
+.flash-ex { font-size: 29rpx; line-height: 1.8; }
+.flash-excn { font-size: 25rpx; color: rgba(245,239,226,.62); margin-top: 12rpx; }
+
+.card-actions { display: flex; gap: 18rpx; }
+
+.quiz-q { font-size: 42rpx; margin-bottom: 10rpx; }
+.finish { text-align: center; padding: 60rpx 40rpx; }
+.finish-emoji { font-size: 88rpx; margin-bottom: 16rpx; }
+.score-big { font-size: 90rpx; color: #c0452f; line-height: 1; }
+
+/* 同义替换 */
+.para-orig { font-size: 34rpx; font-weight: 700; line-height: 1.8; margin: 8rpx 0 6rpx; }
+.para-opt {
+  display: block; padding: 22rpx 26rpx; margin-top: 16rpx; border-radius: 16rpx;
+  border: 2rpx solid #ddd2bb; font-size: 27rpx; line-height: 1.7;
+}
+.para-opt .para-letter { font-weight: 700; color: #c0452f; margin-right: 12rpx; }
+.para-opt.correct { border-color: #2f6049; background: rgba(47,96,73,.08); }
+.para-opt.wrong { border-color: #c0452f; background: rgba(192,69,47,.08); }
+.para-why { margin-top: 20rpx; padding: 20rpx 24rpx; border-radius: 14rpx; background: #efe7d5; font-size: 25rpx; }
