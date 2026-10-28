@@ -90,6 +90,8 @@
     history.replaceState(null, '', '#' + name);
     checkIn();
     if (name === 'dashboard') renderDashboard();
+    if (name === 'daily') enterDaily();
+    if (name !== 'daily') stopDaily(); // 离开听读页即停止连读
   }
   document.addEventListener('click', function (e) {
     var t = e.target.closest('[data-go]');
@@ -118,6 +120,10 @@
     document.getElementById('read-done-num').textContent = rd;
     document.getElementById('read-ring-text').textContent = rd + '/' + D.READING.length;
     ring(document.getElementById('read-ring'), Math.round(rd / D.READING.length * 100));
+    var dnum = document.getElementById('daily-done-num');
+    if (dnum) dnum.textContent = dailyDoneCount();
+    var dtot = document.getElementById('daily-done-total');
+    if (dtot) dtot.textContent = dailyGroups().length;
     document.getElementById('daily-tip').textContent = D.TIPS[dayNum(today()) % D.TIPS.length];
     var w = D.WORDS[dayNum(today()) % D.WORDS.length];
     document.getElementById('dw-w').textContent = w.w;
@@ -593,6 +599,262 @@
   }
   function stopRadio() {
     if (radio.playing) pauseRadio();
+  }
+
+  /* ---------- 日常听读：DAILY_PHRASES 场景对话，整篇连读 + 逐句复读 + 中文显隐 ---------- */
+  var daily = {
+    scene: '', idx: -1, playing: false, gen: 0, watchdog: 0,
+    opts: { cnShow: true, cnRead: false, times: 1, rate: 1 }
+  };
+  (function initDaily() {
+    var s = loadStore();
+    var groups = D.DAILY_PHRASES || [];
+    var ok = groups.some(function (g) { return g.id === s.dailyScene; });
+    daily.scene = ok ? s.dailyScene : (groups[0] && groups[0].id);
+    var o = s.dailyOpts;
+    if (o && typeof o === 'object') {
+      ['cnShow', 'cnRead'].forEach(function (k) {
+        if (typeof o[k] === 'boolean') daily.opts[k] = o[k];
+      });
+      if ([1, 2, 3].indexOf(o.times) >= 0) daily.opts.times = o.times;
+      if ([0.8, 1, 1.25].indexOf(o.rate) >= 0) daily.opts.rate = o.rate;
+    }
+  })();
+  function dailyGroups() { return D.DAILY_PHRASES || []; }
+  function dailyGroup() {
+    var g = dailyGroups().filter(function (x) { return x.id === daily.scene; })[0];
+    return g || dailyGroups()[0];
+  }
+  function dailyDoneMap() {
+    var m = loadStore().dailyDone;
+    return m && typeof m === 'object' ? m : {};
+  }
+  function dailyDoneCount() {
+    var m = dailyDoneMap();
+    return dailyGroups().filter(function (g) { return m[g.id]; }).length;
+  }
+  function saveDailyPrefs() {
+    saveStore({ dailyScene: daily.scene, dailyOpts: daily.opts });
+  }
+  function enterDaily() {
+    var g = dailyGroup();
+    if (g) daily.scene = g.id;
+    renderDaily();
+  }
+  function dailyOpt(name, val) {
+    return daily.opts[name] === val ? ' selected' : '';
+  }
+  function renderDaily() {
+    var stage = document.getElementById('daily-stage');
+    if (!stage) return;
+    var groups = dailyGroups(), g = dailyGroup(), done = dailyDoneMap();
+    var items = g ? g.items : [];
+    document.getElementById('daily-chips').innerHTML = groups.map(function (x) {
+      return '<button class="chip' + (x.id === daily.scene ? ' on' : '') + '" data-dscene="' + x.id + '">' +
+        esc(x.name) + (done[x.id] ? ' ✓' : '') + '</button>';
+    }).join('');
+    var html = '<div class="panel panel-pad daily-panel">' +
+      '<div class="daily-head">' +
+        '<div><span class="tag tag-red">' + esc(g.en) + '</span>' +
+        '<h3 style="margin:8px 0 0;font-family:var(--font-serif)">' + esc(g.name) + '</h3></div>' +
+        '<span class="tag ' + (done[g.id] ? 'tag-green' : '') + '">' +
+          (done[g.id] ? '已听完 ✓' : items.length + ' 句') + '</span>' +
+      '</div>' +
+      '<div class="listen-controls">' +
+        '<button class="btn btn-primary btn-sm" id="daily-play">' +
+          (daily.playing ? '⏸ 停止' : '▶ 播放本组') + '</button>' +
+        '<label class="small muted">语速 <select id="daily-rate">' +
+          '<option value="0.8"' + dailyOpt('rate', 0.8) + '>慢 0.8x</option>' +
+          '<option value="1"' + dailyOpt('rate', 1) + '>常速</option>' +
+          '<option value="1.25"' + dailyOpt('rate', 1.25) + '>快 1.25x</option>' +
+        '</select></label>' +
+        '<label class="small muted">英文读 <select id="daily-times">' +
+          '<option value="1"' + dailyOpt('times', 1) + '>1 遍</option>' +
+          '<option value="2"' + dailyOpt('times', 2) + '>2 遍</option>' +
+          '<option value="3"' + dailyOpt('times', 3) + '>3 遍</option>' +
+        '</select></label>' +
+        '<label class="small muted"><input type="checkbox" id="daily-cnshow"' +
+          (daily.opts.cnShow ? ' checked' : '') + '> 显示中文</label>' +
+        '<label class="small muted"><input type="checkbox" id="daily-cnread"' +
+          (daily.opts.cnRead ? ' checked' : '') + '> 跟读中文</label>' +
+        '<span class="tries" id="daily-progress">' +
+          '已完成 ' + dailyDoneCount() + ' / ' + groups.length + ' 组</span>' +
+      '</div>' +
+      '<div class="dlg-rows" id="daily-rows">' + items.map(function (it, i) {
+        var who = i % 2 ? 'B' : 'A';
+        return '<div class="dlg-row ' + who.toLowerCase() + '" data-dline="' + i + '">' +
+          '<span class="dlg-who who-' + who + '">' + who + '</span>' +
+          '<div class="dlg-bubble">' +
+            '<div class="dlg-en">' + esc(it[0]) + '</div>' +
+            (daily.opts.cnShow ? '<div class="dlg-cn">' + esc(it[1]) + '</div>' : '') +
+          '</div>' +
+          '<span class="dlg-play" title="点句复读">🔊</span>' +
+        '</div>';
+      }).join('') + '</div>' +
+      '<p class="muted small" style="margin:12px 2px 0">点任意一句可单独复读；想练听力先取消「显示中文」。完整播完本组自动打勾。</p>' +
+    '</div>';
+    stage.innerHTML = html;
+
+    stage.querySelectorAll('[data-dscene]').forEach(function (b) {
+      b.onclick = function () {
+        if (b.dataset.dscene === daily.scene) return;
+        stopDaily();
+        daily.scene = b.dataset.dscene;
+        daily.idx = -1;
+        saveDailyPrefs();
+        renderDaily();
+      };
+    });
+    document.getElementById('daily-play').onclick = function () {
+      if (daily.playing) { stopDaily(); renderDaily(); }
+      else { playDaily(daily.idx < 0 ? 0 : daily.idx); }
+    };
+    document.getElementById('daily-rate').onchange = function () {
+      daily.opts.rate = parseFloat(this.value); saveDailyPrefs();
+    };
+    document.getElementById('daily-times').onchange = function () {
+      daily.opts.times = parseInt(this.value, 10); saveDailyPrefs();
+    };
+    document.getElementById('daily-cnshow').onchange = function () {
+      daily.opts.cnShow = this.checked; saveDailyPrefs();
+      // 只重绘气泡区，不打断正在播放的语音
+      var rows = document.getElementById('daily-rows');
+      var gg = dailyGroup();
+      rows.innerHTML = gg.items.map(function (it, i) {
+        var who = i % 2 ? 'B' : 'A';
+        return '<div class="dlg-row ' + who.toLowerCase() + '" data-dline="' + i + '">' +
+          '<span class="dlg-who who-' + who + '">' + who + '</span>' +
+          '<div class="dlg-bubble">' +
+            '<div class="dlg-en">' + esc(it[0]) + '</div>' +
+            (daily.opts.cnShow ? '<div class="dlg-cn">' + esc(it[1]) + '</div>' : '') +
+          '</div>' +
+          '<span class="dlg-play" title="点句复读">🔊</span>' +
+        '</div>';
+      }).join('');
+      bindDailyRows();
+      updateDailyHighlight();
+    };
+    document.getElementById('daily-cnread').onchange = function () {
+      daily.opts.cnRead = this.checked; saveDailyPrefs();
+    };
+    bindDailyRows();
+    updateDailyHighlight();
+  }
+  function bindDailyRows() {
+    document.querySelectorAll('#daily-rows [data-dline]').forEach(function (row) {
+      row.onclick = function () { replayDailyLine(Number(row.dataset.dline)); };
+    });
+  }
+  function dailyLineSeq(i) {
+    var it = dailyGroup().items[i], seq = [];
+    for (var k = 0; k < daily.opts.times; k++) {
+      seq.push({ t: it[0], l: 'en', who: i % 2 ? 'B' : 'A' });
+    }
+    if (daily.opts.cnRead && it[1]) seq.push({ t: it[1], l: 'zh' });
+    return seq;
+  }
+  function playDaily(from) {
+    if (!dailyGroup()) return;
+    if (!('speechSynthesis' in window)) { toast('当前浏览器不支持语音朗读'); return; }
+    daily.playing = true;
+    daily.idx = from;
+    daily.gen++;
+    speechSynthesis.cancel();
+    renderDaily();
+    playDailyTurn(from, 0, daily.gen);
+  }
+  function playDailyTurn(i, j, gen) {
+    if (!daily.playing || gen !== daily.gen) return;
+    var items = dailyGroup().items;
+    if (i >= items.length) { finishDaily(); return; }
+    daily.idx = i;
+    updateDailyHighlight();
+    var seq = dailyLineSeq(i);
+    if (j >= seq.length) {
+      setTimeout(function () { playDailyTurn(i + 1, 0, gen); }, 0);
+      return;
+    }
+    var u = makeUtter(seq[j].t, seq[j].l, daily.opts.rate);
+    if (seq[j].l === 'en') {
+      var v = partVoice(seq[j].who);
+      if (v) u.voice = v;
+    }
+    var done = false;
+    var finish = function () {
+      if (done) return;
+      done = true;
+      clearTimeout(daily.watchdog);
+      setTimeout(function () { playDailyTurn(i, j + 1, gen); }, 0);
+    };
+    u.onend = finish;
+    u.onerror = finish;
+    // onend 偶发不触发时按文本长度兜底；中文按字符计更宽裕
+    var per = seq[j].l === 'zh' ? 350 : 250;
+    daily.watchdog = setTimeout(finish, Math.max(3500, seq[j].t.length * per));
+    speechSynthesis.speak(u);
+  }
+  function updateDailyHighlight() {
+    document.querySelectorAll('#daily-rows .dlg-row').forEach(function (r, i) {
+      r.classList.toggle('turn-cur', i === daily.idx);
+      if (i === daily.idx && daily.idx >= 0) {
+        r.scrollIntoView({ block: 'nearest', behavior: 'smooth' });
+      }
+    });
+    var pb = document.getElementById('daily-play');
+    if (pb) pb.textContent = daily.playing ? '⏸ 停止' : '▶ 播放本组';
+    var prog = document.getElementById('daily-progress');
+    if (prog) {
+      var n = dailyGroup().items.length;
+      prog.textContent = daily.playing && daily.idx >= 0
+        ? '播放中 ' + (daily.idx + 1) + ' / ' + n
+        : '已完成 ' + dailyDoneCount() + ' / ' + dailyGroups().length + ' 组';
+    }
+  }
+  function finishDaily() {
+    daily.playing = false;
+    daily.idx = -1;
+    daily.gen++;
+    clearTimeout(daily.watchdog);
+    if ('speechSynthesis' in window) speechSynthesis.cancel();
+    var s = loadStore();
+    var first = !s.dailyDone || !s.dailyDone[daily.scene];
+    s.dailyDone = s.dailyDone || {};
+    s.dailyDone[daily.scene] = true;
+    try { localStorage.setItem(KEY, JSON.stringify(s)); } catch (e) {}
+    renderDaily();
+    if (first) toast('本组已听完 ✓ 进度已保存');
+  }
+  function replayDailyLine(i) {
+    if (!('speechSynthesis' in window)) { toast('当前浏览器不支持语音朗读'); return; }
+    stopDaily();
+    daily.idx = i;
+    daily.gen++;
+    speechSynthesis.cancel();
+    updateDailyHighlight();
+    var it = dailyGroup().items[i];
+    var u = makeUtter(it[0], 'en', daily.opts.rate);
+    var v = partVoice(i % 2 ? 'B' : 'A');
+    if (v) u.voice = v;
+    var done = false;
+    var settle = function () {
+      if (done) return;
+      done = true;
+      clearTimeout(daily.watchdog);
+      daily.idx = -1;
+      setTimeout(updateDailyHighlight, 0);
+    };
+    u.onend = settle;
+    u.onerror = settle;
+    daily.watchdog = setTimeout(settle, Math.max(3500, it[0].length * 250));
+    speechSynthesis.speak(u);
+  }
+  function stopDaily() {
+    if (!daily.playing && daily.idx < 0) return;
+    daily.playing = false;
+    daily.idx = -1;
+    daily.gen++;
+    clearTimeout(daily.watchdog);
+    if ('speechSynthesis' in window) speechSynthesis.cancel();
   }
 
   /* ---------- 模式切换（闪卡/列表/随身听/拼写/同义替换） ---------- */
